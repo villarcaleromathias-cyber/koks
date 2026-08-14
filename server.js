@@ -6,7 +6,6 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Obtener las claves de forma segura desde las variables de entorno de Render
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
@@ -42,9 +41,13 @@ async function callOpenAI(systemPrompt, messages) {
     })
   });
 
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let data = {};
+  try { data = JSON.parse(rawText); } catch (e) {}
+
   if (!res.ok) {
-    throw new Error(`OpenAI (${res.status}): ${data.error?.message || res.statusText}`);
+    const detail = data.error?.message || rawText || res.statusText;
+    throw new Error(`OpenAI (${res.status}): ${detail}`);
   }
 
   return data.choices[0].message.content;
@@ -71,16 +74,21 @@ async function callGrok(systemPrompt, messages) {
       'Authorization': `Bearer ${GROK_API_KEY.trim()}`
     },
     body: JSON.stringify({
-      model: 'grok-beta',
+      model: 'grok-2-latest',
       messages: formattedMessages,
       max_tokens: 280,
-      temperature: 0.85
+      temperature: 0.85,
+      stream: false
     })
   });
 
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let data = {};
+  try { data = JSON.parse(rawText); } catch (e) {}
+
   if (!res.ok) {
-    throw new Error(`Grok (${res.status}): ${data.error?.message || res.statusText}`);
+    const errorMsg = data.error?.message || data.error || data.detail || rawText || res.statusText;
+    throw new Error(`Grok (${res.status}): ${typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg}`);
   }
 
   return data.choices[0].message.content;
@@ -118,12 +126,12 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
 
     // 1. Intentar con OpenAI
     try {
-      console.log("Intentando procesar mensaje con OpenAI...");
+      console.log("Intentando con OpenAI...");
       replyText = await callOpenAI(systemInstructionText, chatMessages);
     } catch (openAiError) {
       console.warn("OpenAI falló. Cambiando a Grok (xAI)... Motivo:", openAiError.message);
       
-      // 2. Si OpenAI falla o se queda sin crédito, cambiar a Grok
+      // 2. Si falla OpenAI, intentar con Grok
       try {
         replyText = await callGrok(systemInstructionText, chatMessages);
       } catch (grokError) {
