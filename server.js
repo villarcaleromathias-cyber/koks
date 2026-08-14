@@ -6,16 +6,20 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Claves de API (Configuradas con las claves proporcionadas y respaldo por variables de entorno)
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "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";
-const GROK_API_KEY = process.env.GROK_API_KEY || "xai-zNYLLkgPbTf0gdbTlH2HYvopU2hKu8ZiO3kdIkUQhqhK2VuN3sZHwhKWssqCxL7FbgsWNXoBNZiGkKWH";
+// Obtener las claves de forma segura desde las variables de entorno de Render
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GROK_API_KEY = process.env.GROK_API_KEY;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Función para consultar a OpenAI (ChatGPT)
+// Función para llamar a ChatGPT (OpenAI)
 async function callOpenAI(systemPrompt, messages) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("No se ha configurado la variable OPENAI_API_KEY en Render.");
+  }
+
   const formattedMessages = [
     { role: 'system', content: systemPrompt },
     ...messages.map(m => ({
@@ -28,7 +32,7 @@ async function callOpenAI(systemPrompt, messages) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`
+      'Authorization': `Bearer ${OPENAI_API_KEY.trim()}`
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
@@ -38,17 +42,20 @@ async function callOpenAI(systemPrompt, messages) {
     })
   });
 
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(`OpenAI Error (${res.status}): ${errorData.error?.message || res.statusText}`);
+    throw new Error(`OpenAI (${res.status}): ${data.error?.message || res.statusText}`);
   }
 
-  const data = await res.json();
   return data.choices[0].message.content;
 }
 
-// Función para consultar a Grok (xAI) como respaldo
+// Función para llamar a Grok (xAI)
 async function callGrok(systemPrompt, messages) {
+  if (!GROK_API_KEY) {
+    throw new Error("No se ha configurado la variable GROK_API_KEY en Render.");
+  }
+
   const formattedMessages = [
     { role: 'system', content: systemPrompt },
     ...messages.map(m => ({
@@ -61,22 +68,21 @@ async function callGrok(systemPrompt, messages) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROK_API_KEY}`
+      'Authorization': `Bearer ${GROK_API_KEY.trim()}`
     },
     body: JSON.stringify({
-      model: 'grok-2-latest',
+      model: 'grok-beta',
       messages: formattedMessages,
       max_tokens: 280,
       temperature: 0.85
     })
   });
 
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(`Grok Error (${res.status}): ${errorData.error?.message || res.statusText}`);
+    throw new Error(`Grok (${res.status}): ${data.error?.message || res.statusText}`);
   }
 
-  const data = await res.json();
   return data.choices[0].message.content;
 }
 
@@ -110,18 +116,16 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
 
     let replyText = null;
 
-    // 1. Intentar con ChatGPT (OpenAI)
+    // 1. Intentar con OpenAI
     try {
-      console.log("Procesando mensaje con ChatGPT (OpenAI)...");
+      console.log("Intentando procesar mensaje con OpenAI...");
       replyText = await callOpenAI(systemInstructionText, chatMessages);
-      console.log("Respuesta obtenida con ChatGPT.");
     } catch (openAiError) {
-      console.warn("ChatGPT falló o se quedó sin créditos. Cambiando a Grok (xAI)...", openAiError.message);
+      console.warn("OpenAI falló. Cambiando a Grok (xAI)... Motivo:", openAiError.message);
       
-      // 2. Si falla OpenAI, intentar con Grok (xAI)
+      // 2. Si OpenAI falla o se queda sin crédito, cambiar a Grok
       try {
         replyText = await callGrok(systemInstructionText, chatMessages);
-        console.log("Respuesta obtenida con Grok.");
       } catch (grokError) {
         console.error("Grok también falló:", grokError.message);
         throw new Error(`Ambos proveedores fallaron.\nOpenAI: ${openAiError.message}\nGrok: ${grokError.message}`);
