@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Talkie App Web</title>
+  <title>Talkie AI</title>
   <link rel="stylesheet" href="style.css">
-  <!-- SDK para Google Drive Auth -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -21,20 +20,16 @@
       </button>
     </header>
 
-    <!-- SECCIÓN 1: CONTINUAR CHATS (MENSAJES) -->
+    <!-- SECCIÓN 1: CONTINUAR CHATS -->
     <section id="tab-messages" class="tab-content active">
       <h2 class="section-title">Mensajes</h2>
-      <div id="chats-list" class="chats-list">
-        <!-- Se llena dinámicamente -->
-      </div>
+      <div id="chats-list" class="chats-list"></div>
     </section>
 
     <!-- SECCIÓN 2: EXPLORAR PERSONAJES -->
     <section id="tab-explore" class="tab-content">
       <h2 class="section-title">Personajes Disponibles</h2>
-      <div id="characters-grid" class="characters-grid">
-        <!-- Se llena dinámicamente -->
-      </div>
+      <div id="characters-grid" class="characters-grid"></div>
     </section>
 
     <!-- SECCIÓN 3: CREAR PERSONAJE -->
@@ -65,9 +60,7 @@
 
       <div class="form-group">
         <label class="form-label">Selecciona Personalidades (15 Opciones)</label>
-        <div id="personality-chips" class="chips-grid">
-          <!-- Se llenan 15 personalidades dinámicamente -->
-        </div>
+        <div id="personality-chips" class="chips-grid"></div>
       </div>
 
       <div class="form-group">
@@ -77,12 +70,12 @@
 
       <div class="form-group">
         <label class="form-label">Introducción *</label>
-        <textarea id="char-intro" class="textarea-field" rows="3" placeholder="Ingrese lo que desea decir a los usuarios y la información de configuración exclusiva..."></textarea>
+        <textarea id="char-intro" class="textarea-field" rows="3" placeholder="Ingrese lo que desea decir a los usuarios..."></textarea>
       </div>
 
       <div class="form-group">
         <label class="form-label">Prólogo *</label>
-        <textarea id="char-prologue" class="textarea-field" rows="2" placeholder="Este será su primer mensaje para iniciar un chat bajo esta configuración..."></textarea>
+        <textarea id="char-prologue" class="textarea-field" rows="2" placeholder="Este será su primer mensaje para iniciar un chat..."></textarea>
       </div>
 
       <div class="create-actions">
@@ -90,17 +83,29 @@
       </div>
     </section>
 
-    <!-- VENTANA DE CHAT ACTIVO -->
+    <!-- VENTANA DE CHAT ACTIVO ESTILO TALKIE -->
     <div id="chat-modal" class="chat-modal hidden">
       <div class="chat-modal-header">
         <button class="btn-back" onclick="closeChat()">‹</button>
-        <img id="chat-header-avatar" src="" class="chat-avatar">
-        <div id="chat-header-name" class="chat-header-name">Personaje</div>
+        <img id="chat-header-avatar" src="" class="chat-avatar" onclick="showCharacterCard()">
+        <div class="chat-header-info" onclick="showCharacterCard()">
+          <div id="chat-header-name" class="chat-header-name">Personaje</div>
+          <div class="chat-header-status">En línea</div>
+        </div>
       </div>
+
       <div id="chat-messages-container" class="chat-messages-container"></div>
+
+      <!-- BARRA DE ACCIONES RÁPIDAS TALKIE -->
+      <div class="chat-tools-bar">
+        <button class="btn-tool" onclick="regenerateLastMessage()" title="Re-generar última respuesta">🔄 Re-intentar</button>
+      </div>
+
+      <!-- BARRA DE ENTRADA CON RAYITO -->
       <div class="chat-input-bar">
+        <button class="btn-lightning" onclick="triggerLightningAuto()" title="Acción automática por el rayito">⚡</button>
         <input type="text" id="user-input" placeholder="Escribe un mensaje..." onkeypress="handleKeyPress(event)">
-        <button onclick="sendMessage()">➤</button>
+        <button class="btn-send" onclick="sendMessage()">➤</button>
       </div>
     </div>
 
