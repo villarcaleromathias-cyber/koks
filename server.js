@@ -1,23 +1,22 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Claves configuradas directamente con respaldo de variables de entorno
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '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';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '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';
+// Variables de entorno estrictamente desde Render
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 1. Proveedor Principal: Groq (Llama 3.3 70B Versatile)
+// 1. Groq (Llama 3.3 70B - Ultra rápido)
 async function callGroq(systemPrompt, messages) {
   if (!GROQ_API_KEY) {
-    throw new Error("No se ha configurado la variable GROQ_API_KEY.");
+    throw new Error("Falta la variable GROQ_API_KEY en las Environment Variables de Render.");
   }
 
   const formattedMessages = [
@@ -48,16 +47,16 @@ async function callGroq(systemPrompt, messages) {
 
   if (!res.ok) {
     const detail = data.error?.message || rawText || res.statusText;
-    throw new Error(`Groq (${res.status}): ${detail}`);
+    throw new Error(`Groq Error (${res.status}): ${detail}`);
   }
 
   return data.choices[0].message.content;
 }
 
-// 2. Proveedor Respaldo: OpenRouter (Llama 3.1 8B Free)
+// 2. OpenRouter (Llama 3.1 8B Free - Respaldo)
 async function callOpenRouter(systemPrompt, messages) {
   if (!OPENROUTER_API_KEY) {
-    throw new Error("No se ha configurado la variable OPENROUTER_API_KEY.");
+    throw new Error("Falta la variable OPENROUTER_API_KEY en las Environment Variables de Render.");
   }
 
   const formattedMessages = [
@@ -88,13 +87,13 @@ async function callOpenRouter(systemPrompt, messages) {
 
   if (!res.ok) {
     const detail = data.error?.message || rawText || res.statusText;
-    throw new Error(`OpenRouter (${res.status}): ${detail}`);
+    throw new Error(`OpenRouter Error (${res.status}): ${detail}`);
   }
 
   return data.choices[0].message.content;
 }
 
-// Endpoint principal del Chat
+// Endpoint de Chat
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages, characterConfig, isAutoTrigger } = req.body;
@@ -128,18 +127,16 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
 
     // Intento 1: Groq
     try {
-      console.log("Intentando procesar mensaje con Groq...");
       replyText = await callGroq(systemInstructionText, chatMessages);
     } catch (groqError) {
-      console.warn("Groq falló. Cambiando a OpenRouter... Motivo:", groqError.message);
+      console.warn("Falló Groq:", groqError.message);
       errors.push(groqError.message);
 
       // Intento 2: OpenRouter
       try {
-        console.log("Intentando procesar mensaje con OpenRouter...");
         replyText = await callOpenRouter(systemInstructionText, chatMessages);
       } catch (openRouterError) {
-        console.error("OpenRouter también falló:", openRouterError.message);
+        console.error("Falló OpenRouter:", openRouterError.message);
         errors.push(openRouterError.message);
         throw new Error(`Todos los proveedores fallaron:\n` + errors.join('\n'));
       }
@@ -148,7 +145,7 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
     res.json({ reply: replyText });
 
   } catch (error) {
-    console.error("Error en /api/chat:", error.message);
+    console.error("Error global en /api/chat:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
