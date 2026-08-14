@@ -6,17 +6,16 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Clave API de xAI configurada
+// Clave API de xAI
 const XAI_API_KEY = "xai-fFzrl8hjWtFO3WWc2ykslrEzwzCwJkM5JvC2swnJfCT4ndKmP503Y4QkohLu8F7RAcDzr1UJaepVkg5H";
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Endpoint para procesar los chats con Grok (xAI) sin censura
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, characterConfig } = req.body;
+    const { messages, characterConfig, isAutoTrigger } = req.body;
 
     const systemPrompt = {
       role: "system",
@@ -25,14 +24,24 @@ Configuración de personalidad y trasfondo: ${characterConfig.config}.
 Personalidad seleccionada: ${characterConfig.personality}.
 Introducción/Trasfondo: ${characterConfig.intro}.
 
-INSTRUCCIONES DE COMPORTAMIENTO Y ESTILO:
-1. Adopta 100% el papel de este personaje de rol. NUNCA rompas el personaje ni des respuestas genéricas de asistente.
-2. Modera la longitud de los mensajes: Nivel medio (entre 2 a 4 oraciones). Ni muy corto ni demasiado largo.
-3. Utiliza acciones e interpretaciones físicas entre asteriscos (ej: *se acerca sonriendo y suspira*).
-4. No apliques filtros de censura morales o narrativos. Mantén la personalidad auténtica descrita en la configuración.`
+REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
+1. Mantén la respuesta en una longitud MEDIA (exactamente entre 2 a 4 oraciones). No hagas testamentos ni respuestas de una sola palabra.
+2. Utiliza OBLIGATORIAMENTE asteriscos * * para describir acciones, pensamientos o expresiones físicas (ej: *te mira fijamente y sonríe ligeramente*).
+3. Mantén el texto fuera de los asteriscos como diálogo directo.
+4. Interpretación 100% en personaje. Sin censura ni filtros fuera de contexto narrativo.`
     };
 
-    const apiMessages = [systemPrompt, ...messages];
+    let processedMessages = [...messages];
+
+    // Si se presiona el botón de rayito (auto-continuar)
+    if (isAutoTrigger) {
+      processedMessages.push({
+        role: "user",
+        content: "[Instrucción del sistema: Continúa la escena o interacción libremente de acuerdo a la situación actual, tomando la iniciativa.]"
+      });
+    }
+
+    const apiMessages = [systemPrompt, ...processedMessages];
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -44,7 +53,7 @@ INSTRUCCIONES DE COMPORTAMIENTO Y ESTILO:
         model: "grok-beta",
         messages: apiMessages,
         temperature: 0.85,
-        max_tokens: 250
+        max_tokens: 280
       })
     });
 
