@@ -6,17 +6,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Variables de entorno desde Render
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Función para llamar a ChatGPT (OpenAI)
+// 1. Proveedor: OpenAI (ChatGPT)
 async function callOpenAI(systemPrompt, messages) {
   if (!OPENAI_API_KEY) {
-    throw new Error("No se ha configurado la variable OPENAI_API_KEY en Render.");
+    throw new Error("No se ha configurado OPENAI_API_KEY en Render.");
   }
 
   const formattedMessages = [
@@ -53,10 +55,50 @@ async function callOpenAI(systemPrompt, messages) {
   return data.choices[0].message.content;
 }
 
-// Función para llamar a Grok (xAI)
+// 2. Proveedor: Google Gemini (Respaldo secundario muy estable y rápido)
+async function callGemini(systemPrompt, messages) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("No se ha configurado GEMINI_API_KEY en Render.");
+  }
+
+  const contents = messages.map(m => ({
+    role: (m.role === 'assistant' || m.role === 'model') ? 'model' : 'user',
+    parts: [{ text: m.content || m.text || '' }]
+  }));
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      contents: contents,
+      generationConfig: {
+        maxOutputTokens: 280,
+        temperature: 0.85
+      }
+    })
+  });
+
+  const rawText = await res.text();
+  let data = {};
+  try { data = JSON.parse(rawText); } catch (e) {}
+
+  if (!res.ok) {
+    const detail = data.error?.message || rawText || res.statusText;
+    throw new Error(`Gemini (${res.status}): ${detail}`);
+  }
+
+  return data.candidates[0].content.parts[0].text;
+}
+
+// 3. Proveedor: xAI Grok
 async function callGrok(systemPrompt, messages) {
   if (!GROK_API_KEY) {
-    throw new Error("No se ha configurado la variable GROK_API_KEY en Render.");
+    throw new Error("No se ha configurado GROK_API_KEY en Render.");
   }
 
   const formattedMessages = [
@@ -74,11 +116,10 @@ async function callGrok(systemPrompt, messages) {
       'Authorization': `Bearer ${GROK_API_KEY.trim()}`
     },
     body: JSON.stringify({
-      model: 'grok-2-latest',
+      model: 'grok-2',
       messages: formattedMessages,
       max_tokens: 280,
-      temperature: 0.85,
-      stream: false
+      temperature: 0.85
     })
   });
 
@@ -87,13 +128,14 @@ async function callGrok(systemPrompt, messages) {
   try { data = JSON.parse(rawText); } catch (e) {}
 
   if (!res.ok) {
-    const errorMsg = data.error?.message || data.error || data.detail || rawText || res.statusText;
+    const errorMsg = data.error?.message || data.error || rawText || res.statusText;
     throw new Error(`Grok (${res.status}): ${typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg}`);
   }
 
   return data.choices[0].message.content;
 }
 
+// Endpoint principal del Chat
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages, characterConfig, isAutoTrigger } = req.body;
@@ -123,20 +165,33 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
     }
 
     let replyText = null;
+    let errors = [];
 
-    // 1. Intentar con OpenAI
+    // Intento 1: OpenAI
     try {
       console.log("Intentando con OpenAI...");
       replyText = await callOpenAI(systemInstructionText, chatMessages);
     } catch (openAiError) {
-      console.warn("OpenAI falló. Cambiando a Grok (xAI)... Motivo:", openAiError.message);
-      
-      // 2. Si falla OpenAI, intentar con Grok
+      console.warn("OpenAI falló. Cambiando a Gemini... Motivo:", openAiError.message);
+      errors.push(`OpenAI: ${openAiError.message}`);
+
+      // Intento 2: Gemini
       try {
-        replyText = await callGrok(systemInstructionText, chatMessages);
-      } catch (grokError) {
-        console.error("Grok también falló:", grokError.message);
-        throw new Error(`Ambos proveedores fallaron.\nOpenAI: ${openAiError.message}\nGrok: ${grokError.message}`);
+        console.log("Intentando con Gemini...");
+        replyText = await callGemini(systemInstructionText, chatMessages);
+      } catch (geminiError) {
+        console.warn("Gemini falló. Cambiando a Grok... Motivo:", geminiError.message);
+        errors.push(`Gemini: ${geminiError.message}`);
+
+        // Intento 3: Grok
+        try {
+          console.log("Intentando con Grok...");
+          replyText = await callGrok(systemInstructionText, chatMessages);
+        } catch (grokError) {
+          console.error("Grok también falló:", grokError.message);
+          errors.push(`Grok: ${grokError.message}`);
+          throw new Error(`Todos los proveedores fallaron:\n` + errors.join('\n'));
+        }
       }
     }
 
