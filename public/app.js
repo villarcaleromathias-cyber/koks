@@ -4,10 +4,16 @@ const PERSONALITIES = [
   "Protectora", "Coqueta", "Inteligente", "Rebelde", "Energética"
 ];
 
+// Coloca aquí tu Client ID de Google Cloud OAuth
+const GOOGLE_CLIENT_ID = "TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+
 let currentSelectedGender = "Hombre";
 let selectedPersonalities = [];
 let currentImageBase64 = "https://via.placeholder.com/150";
 let currentActiveCharId = null;
+
+let driveAccessToken = null;
+let driveFileId = null;
 
 let appData = {
   characters: [],
@@ -68,12 +74,9 @@ function previewImage(event) {
   }
 }
 
-// FORMATEADOR DE ASTERISCOS (Plomo transparente)
 function parseAsterisks(text) {
   if (!text) return '';
-  // Sanear HTML
   let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  // Convertir *texto* en <span class="action-text">*texto*</span>
   return safeText.replace(/\*([^*]+)\*/g, '<span class="action-text">* $1 *</span>');
 }
 
@@ -203,7 +206,6 @@ function renderChatMessages() {
   container.scrollTop = container.scrollHeight;
 }
 
-// Enviar mensaje manual
 async function sendMessage() {
   const input = document.getElementById('user-input');
   const text = input.value.trim();
@@ -217,29 +219,25 @@ async function sendMessage() {
   await requestAIReply(false);
 }
 
-// Botón de Rayito ⚡ (Acción Automática)
 async function triggerLightningAuto() {
   if (!currentActiveCharId) return;
   await requestAIReply(true);
 }
 
-// Botón Re-generar 🔄
 async function regenerateLastMessage() {
   if (!currentActiveCharId) return;
   const msgs = appData.chats[currentActiveCharId];
   if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'char') {
-    msgs.pop(); // Eliminar último mensaje del personaje
+    msgs.pop();
     renderChatMessages();
     await requestAIReply(false);
   }
 }
 
-// Petición a la API Backend
 async function requestAIReply(isAutoTrigger) {
   const char = appData.characters.find(c => c.id === currentActiveCharId);
   const container = document.getElementById('chat-messages-container');
 
-  // Mostrar "Escribiendo..."
   const typing = document.createElement('div');
   typing.className = 'typing-indicator';
   typing.id = 'typing-indicator';
@@ -270,6 +268,8 @@ async function requestAIReply(isAutoTrigger) {
       appData.chats[currentActiveCharId].push({ sender: 'char', text: data.reply });
       renderChatMessages();
       saveData();
+    } else {
+      alert("Error en la IA: " + (data.error || "No hubo respuesta"));
     }
   } catch (e) {
     document.getElementById('typing-indicator')?.remove();
@@ -281,8 +281,12 @@ function handleKeyPress(e) {
   if (e.key === 'Enter') sendMessage();
 }
 
+// GUARDA LOCALMENTE Y EN GOOGLE DRIVE
 function saveData() {
   localStorage.setItem('talkie_app_data', JSON.stringify(appData));
+  if (driveAccessToken) {
+    syncToGoogleDrive();
+  }
 }
 
 function loadLocalData() {
@@ -292,15 +296,111 @@ function loadLocalData() {
   }
 }
 
+// -------------------------------------------------------------
+// LOGICA DE AUTENTICACION Y SINCRONIZACIÓN CON GOOGLE DRIVE
+// -------------------------------------------------------------
+
 function handleDriveAuth() {
-  google.accounts.oauth2.initTokenClient({
-    client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+  if (GOOGLE_CLIENT_ID.includes("TU_GOOGLE_CLIENT_ID")) {
+    alert("Por favor configura tu GOOGLE_CLIENT_ID en app.js");
+    return;
+  }
+
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/drive.file',
-    callback: (response) => {
+    callback: async (response) => {
       if (response.access_token) {
-        document.getElementById('drive-status').innerText = 'Drive Conectado';
-        alert('Google Drive sincronizado.');
+        driveAccessToken = response.access_token;
+        document.getElementById('drive-status').innerText = 'Conectado ✓';
+        document.getElementById('btn-drive').style.borderColor = '#2ec4b6';
+        
+        // Cargar copia de seguridad desde Google Drive
+        await loadFromGoogleDrive();
       }
     }
-  }).requestAccessToken();
+  });
+  client.requestAccessToken();
+}
+
+async function syncToGoogleDrive() {
+  if (!driveAccessToken) return;
+
+  const fileContent = JSON.stringify(appData);
+  const metadata = {
+    name: 'talkie_backup.json',
+    mimeType: 'application/json'
+  };
+
+  try {
+    if (!driveFileId) {
+      // Buscar si el archivo ya existe en Google Drive
+      const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='talkie_backup.json' and trashed=false", {
+        headers: { Authorization: `Bearer ${driveAccessToken}` }
+      });
+      const searchData = await searchRes.json();
+      
+      if (searchData.files && searchData.files.length > 0) {
+        driveFileId = searchData.files[0].id;
+      }
+    }
+
+    if (driveFileId) {
+      // Actualizar archivo existente
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${driveAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: fileContent
+      });
+    } else {
+      // Crear nuevo archivo si no existe
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+      const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${driveAccessToken}` },
+        body: form
+      });
+      const createData = await createRes.json();
+      driveFileId = createData.id;
+    }
+    console.log("Datos sincronizados en Google Drive correctamente.");
+  } catch (err) {
+    console.error("Error al sincronizar con Google Drive:", err);
+  }
+}
+
+async function loadFromGoogleDrive() {
+  try {
+    const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='talkie_backup.json' and trashed=false", {
+      headers: { Authorization: `Bearer ${driveAccessToken}` }
+    });
+    const searchData = await searchRes.json();
+
+    if (searchData.files && searchData.files.length > 0) {
+      driveFileId = searchData.files[0].id;
+      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
+        headers: { Authorization: `Bearer ${driveAccessToken}` }
+      });
+      const driveData = await fileRes.json();
+
+      if (driveData && driveData.characters) {
+        appData = driveData;
+        saveData();
+        renderCharactersGrid();
+        renderMessagesList();
+        alert("¡Datos cargados con éxito desde tu Google Drive!");
+      }
+    } else {
+      // Si el archivo no existe, lo crea por primera vez
+      await syncToGoogleDrive();
+    }
+  } catch (err) {
+    console.error("Error al cargar datos desde Google Drive:", err);
+  }
 }
