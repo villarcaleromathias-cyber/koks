@@ -32,21 +32,38 @@
       <div id="characters-grid" class="characters-grid"></div>
     </section>
 
-    <!-- SECCIÓN 3: CREAR PERSONAJE -->
+    <!-- SECCIÓN 3: CREAR PERSONAJE (EXPANDIDO ESTILO TALKIE) -->
     <section id="tab-create" class="tab-content">
       <div class="create-header">
-        <h2>Crear</h2>
+        <h2>Crear Talkie</h2>
       </div>
 
-      <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
-        <div class="upload-icon">+</div>
-        <div>Establecer imagen</div>
-        <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
-        <img id="image-preview" class="image-preview" src="" alt="Vista previa">
+      <!-- SELECTOR DE AVATAR: SUBIR O GENERAR CON IA -->
+      <div class="avatar-creation-box">
+        <div class="avatar-toggle-tabs">
+          <button type="button" class="tab-avatar-btn active" onclick="switchAvatarMode('upload')">📁 Subir Foto</button>
+          <button type="button" class="tab-avatar-btn" onclick="switchAvatarMode('ai')">✨ Generar con IA</button>
+        </div>
+
+        <!-- MODO SUBIR ARCHIVO -->
+        <div id="avatar-mode-upload" class="image-upload-box" onclick="document.getElementById('image-input').click()">
+          <div class="upload-icon">+</div>
+          <div>Establecer imagen</div>
+          <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+          <img id="image-preview" class="image-preview" src="" alt="Vista previa">
+        </div>
+
+        <!-- MODO GENERADOR IA -->
+        <div id="avatar-mode-ai" class="ai-image-box hidden">
+          <input type="text" id="ai-image-prompt" class="input-field" placeholder="Ej: Anime girl with pink hair, sharp eyes, highly detailed">
+          <button type="button" class="btn-ai-generate" onclick="generateAIAvatar()">✨ Generar Foto con IA</button>
+          <div id="ai-loading-spinner" class="spinner hidden">⏳ Generando imagen...</div>
+        </div>
       </div>
 
+      <!-- INFORMACIÓN BÁSICA -->
       <div class="form-group">
-        <input type="text" id="char-name" class="input-field" placeholder="Nombrar tu Talkie">
+        <input type="text" id="char-name" class="input-field" placeholder="Nombrar tu Talkie *">
       </div>
 
       <div class="form-group">
@@ -58,24 +75,44 @@
         </div>
       </div>
 
+      <!-- RELACIÓN Y TONO -->
+      <div class="form-row">
+        <div class="form-group half">
+          <label class="form-label">Relación con el Usuario</label>
+          <input type="text" id="char-relationship" class="input-field" placeholder="Ej: Mejor amigo, Rival, Pareja...">
+        </div>
+        <div class="form-group half">
+          <label class="form-label">Tono / Estilo de voz</label>
+          <input type="text" id="char-tone" class="input-field" placeholder="Ej: Coqueto, Frío, Tsundere...">
+        </div>
+      </div>
+
+      <!-- ESCENARIO O MUNDO -->
       <div class="form-group">
-        <label class="form-label">Selecciona Personalidades (15 Opciones)</label>
+        <label class="form-label">Escenario / Contexto del Mundo</label>
+        <textarea id="char-scenario" class="textarea-field" rows="2" placeholder="Ej: Están atrapados en un salón de clases durante una tormenta..."></textarea>
+      </div>
+
+      <!-- PERSONALIDADES -->
+      <div class="form-group">
+        <label class="form-label">Selecciona Personalidades</label>
         <div id="personality-chips" class="chips-grid"></div>
       </div>
 
+      <!-- CONFIGURACIÓN Y ANTECEDENTES -->
       <div class="form-group">
-        <label class="form-label">Configuración (Determina el efecto del diálogo) *</label>
-        <textarea id="char-config" class="textarea-field" rows="3" placeholder="Ingrese aquí la configuración exclusiva del agente... persona, personalidad, antecedentes, estilo de chat, relación con el usuario, etc."></textarea>
+        <label class="form-label">Configuración y Antecedentes *</label>
+        <textarea id="char-config" class="textarea-field" rows="3" placeholder="Ingrese la configuración exclusiva del agente... personalidad profunda, pasado, secretos, estilo de conversación..."></textarea>
       </div>
 
       <div class="form-group">
         <label class="form-label">Introducción *</label>
-        <textarea id="char-intro" class="textarea-field" rows="3" placeholder="Ingrese lo que desea decir a los usuarios..."></textarea>
+        <textarea id="char-intro" class="textarea-field" rows="3" placeholder="Breve descripción o presentación visible en la ficha del personaje..."></textarea>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Prólogo *</label>
-        <textarea id="char-prologue" class="textarea-field" rows="2" placeholder="Este será su primer mensaje para iniciar un chat..."></textarea>
+        <label class="form-label">Prólogo (Primer mensaje) *</label>
+        <textarea id="char-prologue" class="textarea-field" rows="2" placeholder="*Te mira al entrar y sonríe ligeramente* Hola, ¿qué haces aquí?"></textarea>
       </div>
 
       <div class="create-actions">
@@ -85,15 +122,30 @@
 
     <!-- VENTANA DE CHAT ACTIVO ESTILO TALKIE -->
     <div id="chat-modal" class="chat-modal hidden">
+      <!-- Fondo difuminado dinámico -->
+      <div id="chat-bg-overlay" class="chat-bg-overlay"></div>
+
+      <!-- HEADER DEL CHAT -->
       <div class="chat-modal-header">
         <button class="btn-back" onclick="closeChat()">‹</button>
-        <img id="chat-header-avatar" src="" class="chat-avatar" onclick="showCharacterCard()">
-        <div class="chat-header-info" onclick="showCharacterCard()">
+        <img id="chat-header-avatar" src="" class="chat-avatar" onclick="openCharacterCard()">
+        <div class="chat-header-info" onclick="openCharacterCard()">
           <div id="chat-header-name" class="chat-header-name">Personaje</div>
           <div class="chat-header-status">En línea</div>
         </div>
+
+        <!-- MENÚ DE 3 PUNTOS (⋮) -->
+        <div class="chat-menu-container">
+          <button class="btn-three-dots" onclick="toggleChatDropdown(event)">⋮</button>
+          <div id="chat-dropdown-menu" class="chat-dropdown hidden">
+            <button onclick="openCharacterCard()"><span class="menu-icon">👤</span> Ver Ficha</button>
+            <button onclick="clearChatHistory()"><span class="menu-icon">🗑️</span> Eliminar Chat</button>
+            <button onclick="triggerManualSync()"><span class="menu-icon">☁️</span> Guardar en Drive</button>
+          </div>
+        </div>
       </div>
 
+      <!-- CONTENEDOR DE MENSAJES -->
       <div id="chat-messages-container" class="chat-messages-container"></div>
 
       <!-- BARRA DE ACCIONES RÁPIDAS TALKIE -->
@@ -106,6 +158,35 @@
         <button class="btn-lightning" onclick="triggerLightningAuto()" title="Acción automática por el rayito">⚡</button>
         <input type="text" id="user-input" placeholder="Escribe un mensaje..." onkeypress="handleKeyPress(event)">
         <button class="btn-send" onclick="sendMessage()">➤</button>
+      </div>
+    </div>
+
+    <!-- MODAL 1: EDITAR MENSAJE DEL USUARIO -->
+    <div id="edit-message-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3>Editar mensaje</h3>
+        <textarea id="edit-message-text" class="textarea-field" rows="4"></textarea>
+        <div class="modal-actions">
+          <button class="btn-secondary" onclick="closeEditMessageModal()">Cancelar</button>
+          <button class="btn-primary" onclick="confirmMessageEdit()">Guardar y Reenviar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: FICHA / TARJETA DEL PERSONAJE -->
+    <div id="character-card-modal" class="modal-overlay hidden">
+      <div class="modal-card character-card-detail">
+        <button class="btn-close-modal" onclick="closeCharacterCard()">✕</button>
+        <img id="card-avatar" src="" class="card-avatar-large" alt="Avatar">
+        <h2 id="card-name">Nombre</h2>
+        <p id="card-relationship-tag" class="card-tag">Relación: -</p>
+        <p id="card-tone-tag" class="card-tag">Tono: -</p>
+        <hr class="card-divider">
+        <p id="card-intro" class="card-description"></p>
+        <div class="card-details-box">
+          <strong>Escenario:</strong>
+          <p id="card-scenario"></p>
+        </div>
       </div>
     </div>
 
