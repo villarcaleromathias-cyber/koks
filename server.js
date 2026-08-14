@@ -6,76 +6,18 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Variables de entorno desde Render
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GROK_API_KEY = process.env.GROK_API_KEY;
+// Claves configuradas directamente con respaldo de variables de entorno
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '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';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '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';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. PROVEEDOR GEMINI: Bucle con todos los modelos y versiones disponibles ---
-async function callGeminiWithFallbacks(systemPrompt, messages) {
-  if (!GEMINI_API_KEY) {
-    throw new Error("No se ha configurado GEMINI_API_KEY en Render.");
-  }
-
-  const contents = messages.map(m => ({
-    role: (m.role === 'assistant' || m.role === 'model') ? 'model' : 'user',
-    parts: [{ text: m.content || m.text || '' }]
-  }));
-
-  const payload = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: contents,
-    generationConfig: { maxOutputTokens: 280, temperature: 0.85 }
-  };
-
-  // Lista completa de combinaciones a probar
-  const geminiCandidates = [
-    { model: 'gemini-2.0-flash', version: 'v1beta' },
-    { model: 'gemini-2.0-flash-lite', version: 'v1beta' },
-    { model: 'gemini-1.5-flash', version: 'v1beta' },
-    { model: 'gemini-1.5-flash', version: 'v1' },
-    { model: 'gemini-1.5-flash-8b', version: 'v1beta' },
-    { model: 'gemini-1.5-pro', version: 'v1beta' }
-  ];
-
-  let lastError = '';
-
-  for (const candidate of geminiCandidates) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/${candidate.version}/models/${candidate.model}:generateContent?key=${GEMINI_API_KEY.trim()}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const rawText = await res.text();
-      let data = {};
-      try { data = JSON.parse(rawText); } catch (e) {}
-
-      if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.log(`✅ Gemini funcionó con: ${candidate.model} (${candidate.version})`);
-        return data.candidates[0].content.parts[0].text;
-      } else {
-        lastError = data.error?.message || rawText || res.statusText;
-        console.warn(`⚠️ Falló Gemini [${candidate.model} ${candidate.version}]:`, lastError);
-      }
-    } catch (err) {
-      lastError = err.message;
-    }
-  }
-
-  throw new Error(`Gemini falló en todos sus modelos. Último detalle: ${lastError}`);
-}
-
-// --- 2. PROVEEDOR GROK: Bucle con todos los identificadores de xAI ---
-async function callGrokWithFallbacks(systemPrompt, messages) {
-  if (!GROK_API_KEY) {
-    throw new Error("No se ha configurado GROK_API_KEY en Render.");
+// 1. Proveedor Principal: Groq (Llama 3.3 70B Versatile)
+async function callGroq(systemPrompt, messages) {
+  if (!GROQ_API_KEY) {
+    throw new Error("No se ha configurado la variable GROQ_API_KEY.");
   }
 
   const formattedMessages = [
@@ -86,67 +28,14 @@ async function callGrokWithFallbacks(systemPrompt, messages) {
     }))
   ];
 
-  const grokModels = ['grok-2-1212', 'grok-2', 'grok-beta', 'grok-2-vision-1212'];
-  let lastError = '';
-
-  for (const modelName of grokModels) {
-    try {
-      const res = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROK_API_KEY.trim()}`
-        },
-        body: JSON.stringify({
-          model: modelName,
-          messages: formattedMessages,
-          max_tokens: 280,
-          temperature: 0.85
-        })
-      });
-
-      const rawText = await res.text();
-      let data = {};
-      try { data = JSON.parse(rawText); } catch (e) {}
-
-      if (res.ok && data.choices?.[0]?.message?.content) {
-        console.log(`✅ Grok funcionó con: ${modelName}`);
-        return data.choices[0].message.content;
-      } else {
-        const errorMsg = data.error?.message || data.error || rawText || res.statusText;
-        lastError = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg;
-        console.warn(`⚠️ Falló Grok [${modelName}]:`, lastError);
-      }
-    } catch (err) {
-      lastError = err.message;
-    }
-  }
-
-  throw new Error(`Grok falló en todos sus modelos. Último detalle: ${lastError}`);
-}
-
-// --- 3. PROVEEDOR OPENAI ---
-async function callOpenAI(systemPrompt, messages) {
-  if (!OPENAI_API_KEY) {
-    throw new Error("No se ha configurado OPENAI_API_KEY en Render.");
-  }
-
-  const formattedMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages.map(m => ({
-      role: (m.role === 'assistant' || m.role === 'model') ? 'assistant' : 'user',
-      content: m.content || m.text || ''
-    }))
-  ];
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY.trim()}`
+      'Authorization': `Bearer ${GROQ_API_KEY.trim()}`
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.3-70b-versatile',
       messages: formattedMessages,
       max_tokens: 280,
       temperature: 0.85
@@ -159,13 +48,53 @@ async function callOpenAI(systemPrompt, messages) {
 
   if (!res.ok) {
     const detail = data.error?.message || rawText || res.statusText;
-    throw new Error(`OpenAI (${res.status}): ${detail}`);
+    throw new Error(`Groq (${res.status}): ${detail}`);
   }
 
   return data.choices[0].message.content;
 }
 
-// --- ENDPOINT PRINCIPAL DE CHAT ---
+// 2. Proveedor Respaldo: OpenRouter (Llama 3.1 8B Free)
+async function callOpenRouter(systemPrompt, messages) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("No se ha configurado la variable OPENROUTER_API_KEY.");
+  }
+
+  const formattedMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.map(m => ({
+      role: (m.role === 'assistant' || m.role === 'model') ? 'assistant' : 'user',
+      content: m.content || m.text || ''
+    }))
+  ];
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY.trim()}`
+    },
+    body: JSON.stringify({
+      model: 'meta-llama/llama-3.1-8b-instruct:free',
+      messages: formattedMessages,
+      max_tokens: 280,
+      temperature: 0.85
+    })
+  });
+
+  const rawText = await res.text();
+  let data = {};
+  try { data = JSON.parse(rawText); } catch (e) {}
+
+  if (!res.ok) {
+    const detail = data.error?.message || rawText || res.statusText;
+    throw new Error(`OpenRouter (${res.status}): ${detail}`);
+  }
+
+  return data.choices[0].message.content;
+}
+
+// Endpoint principal del Chat
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages, characterConfig, isAutoTrigger } = req.body;
@@ -197,25 +126,22 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
     let replyText = null;
     let errors = [];
 
-    // 1. Probar bucle de Gemini
+    // Intento 1: Groq
     try {
-      replyText = await callGeminiWithFallbacks(systemInstructionText, chatMessages);
-    } catch (geminiErr) {
-      errors.push(geminiErr.message);
+      console.log("Intentando procesar mensaje con Groq...");
+      replyText = await callGroq(systemInstructionText, chatMessages);
+    } catch (groqError) {
+      console.warn("Groq falló. Cambiando a OpenRouter... Motivo:", groqError.message);
+      errors.push(groqError.message);
 
-      // 2. Probar bucle de Grok
+      // Intento 2: OpenRouter
       try {
-        replyText = await callGrokWithFallbacks(systemInstructionText, chatMessages);
-      } catch (grokErr) {
-        errors.push(grokErr.message);
-
-        // 3. Probar OpenAI
-        try {
-          replyText = await callOpenAI(systemInstructionText, chatMessages);
-        } catch (openAiErr) {
-          errors.push(openAiErr.message);
-          throw new Error(`Todos los proveedores fallaron:\n` + errors.join('\n'));
-        }
+        console.log("Intentando procesar mensaje con OpenRouter...");
+        replyText = await callOpenRouter(systemInstructionText, chatMessages);
+      } catch (openRouterError) {
+        console.error("OpenRouter también falló:", openRouterError.message);
+        errors.push(openRouterError.message);
+        throw new Error(`Todos los proveedores fallaron:\n` + errors.join('\n'));
       }
     }
 
