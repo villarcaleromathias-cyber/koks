@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Talkie App Web</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- SDK para Google Drive Auth -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- HEADER CONECTAR DRIVE -->
+    <header class="app-header">
+      <div class="header-title">Talkie AI</div>
+      <button id="btn-drive" class="btn-drive-connect" onclick="handleDriveAuth()">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" alt="Drive">
+        <span id="drive-status">Conectar Drive</span>
+      </button>
+    </header>
+
+    <!-- SECCIÓN 1: CONTINUAR CHATS (MENSAJES) -->
+    <section id="tab-messages" class="tab-content active">
+      <h2 class="section-title">Mensajes</h2>
+      <div id="chats-list" class="chats-list">
+        <!-- Se llena dinámicamente -->
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: EXPLORAR PERSONAJES -->
+    <section id="tab-explore" class="tab-content">
+      <h2 class="section-title">Personajes Disponibles</h2>
+      <div id="characters-grid" class="characters-grid">
+        <!-- Se llena dinámicamente -->
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: CREAR PERSONAJE -->
+    <section id="tab-create" class="tab-content">
+      <div class="create-header">
+        <h2>Crear</h2>
+      </div>
+
+      <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
+        <div class="upload-icon">+</div>
+        <div>Establecer imagen</div>
+        <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+        <img id="image-preview" class="image-preview" src="" alt="Vista previa">
+      </div>
+
+      <div class="form-group">
+        <input type="text" id="char-name" class="input-field" placeholder="Nombrar tu Talkie">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Género (Bloqueado después de la creación) *</label>
+        <div class="gender-selector">
+          <button type="button" class="btn-gender active" onclick="selectGender(this, 'Hombre')">Hombre</button>
+          <button type="button" class="btn-gender" onclick="selectGender(this, 'Femenino')">Femenino</button>
+          <button type="button" class="btn-gender" onclick="selectGender(this, 'Otro')">Otro</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Selecciona Personalidades (15 Opciones)</label>
+        <div id="personality-chips" class="chips-grid">
+          <!-- Se llenan 15 personalidades dinámicamente -->
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Configuración (Determina el efecto del diálogo) *</label>
+        <textarea id="char-config" class="textarea-field" rows="3" placeholder="Ingrese aquí la configuración exclusiva del agente... persona, personalidad, antecedentes, estilo de chat, relación con el usuario, etc."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Introducción *</label>
+        <textarea id="char-intro" class="textarea-field" rows="3" placeholder="Ingrese lo que desea decir a los usuarios y la información de configuración exclusiva..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Prólogo *</label>
+        <textarea id="char-prologue" class="textarea-field" rows="2" placeholder="Este será su primer mensaje para iniciar un chat bajo esta configuración..."></textarea>
+      </div>
+
+      <div class="create-actions">
+        <button class="btn-submit" onclick="createNewCharacter()">Crear Personaje</button>
+      </div>
+    </section>
+
+    <!-- VENTANA DE CHAT ACTIVO -->
+    <div id="chat-modal" class="chat-modal hidden">
+      <div class="chat-modal-header">
+        <button class="btn-back" onclick="closeChat()">‹</button>
+        <img id="chat-header-avatar" src="" class="chat-avatar">
+        <div id="chat-header-name" class="chat-header-name">Personaje</div>
+      </div>
+      <div id="chat-messages-container" class="chat-messages-container"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="user-input" placeholder="Escribe un mensaje..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">➤</button>
+      </div>
+    </div>
+
+    <!-- NAVEGACIÓN INFERIOR (LOBBY) -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" onclick="switchTab('messages', this)">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">Mensajes</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('explore', this)">
+        <span class="nav-icon">🧭</span>
+        <span class="nav-label">Explorar</span>
+      </button>
+      <button class="nav-item" onclick="switchTab('create', this)">
+        <span class="nav-icon">➕</span>
+        <span class="nav-label">Crear</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
