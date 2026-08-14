@@ -5,7 +5,7 @@ const PERSONALITIES = [
 ];
 
 // Coloca aquí tu Client ID de Google Cloud OAuth
-const GOOGLE_CLIENT_ID = "TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "52700461638-j9sqlt044m6t14krnkmlfiq0trfe2ct3.apps.googleusercontent.com";
 
 let currentSelectedGender = "Hombre";
 let selectedPersonalities = [];
