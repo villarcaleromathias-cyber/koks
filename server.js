@@ -15,8 +15,8 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 1. Proveedor: Google Gemini (Doble verificación v1beta / v1)
-async function callGemini(systemPrompt, messages) {
+// --- 1. PROVEEDOR GEMINI: Bucle con todos los modelos y versiones disponibles ---
+async function callGeminiWithFallbacks(systemPrompt, messages) {
   if (!GEMINI_API_KEY) {
     throw new Error("No se ha configurado GEMINI_API_KEY en Render.");
   }
@@ -32,48 +32,48 @@ async function callGemini(systemPrompt, messages) {
     generationConfig: { maxOutputTokens: 280, temperature: 0.85 }
   };
 
-  // Intento A: Gemini 2.0 Flash (Endpoint v1beta)
-  try {
-    const url20 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
-    const res = await fetch(url20, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+  // Lista completa de combinaciones a probar
+  const geminiCandidates = [
+    { model: 'gemini-2.0-flash', version: 'v1beta' },
+    { model: 'gemini-2.0-flash-lite', version: 'v1beta' },
+    { model: 'gemini-1.5-flash', version: 'v1beta' },
+    { model: 'gemini-1.5-flash', version: 'v1' },
+    { model: 'gemini-1.5-flash-8b', version: 'v1beta' },
+    { model: 'gemini-1.5-pro', version: 'v1beta' }
+  ];
 
-    const rawText = await res.text();
-    let data = {};
-    try { data = JSON.parse(rawText); } catch (e) {}
+  let lastError = '';
 
-    if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
+  for (const candidate of geminiCandidates) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/${candidate.version}/models/${candidate.model}:generateContent?key=${GEMINI_API_KEY.trim()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const rawText = await res.text();
+      let data = {};
+      try { data = JSON.parse(rawText); } catch (e) {}
+
+      if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        console.log(`✅ Gemini funcionó con: ${candidate.model} (${candidate.version})`);
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        lastError = data.error?.message || rawText || res.statusText;
+        console.warn(`⚠️ Falló Gemini [${candidate.model} ${candidate.version}]:`, lastError);
+      }
+    } catch (err) {
+      lastError = err.message;
     }
-  } catch (e) {
-    console.warn("Gemini 2.0 Flash falló, probando Gemini 1.5 Flash...");
   }
 
-  // Intento B: Gemini 1.5 Flash (Endpoint v1)
-  const url15 = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
-  const res = await fetch(url15, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  const rawText = await res.text();
-  let data = {};
-  try { data = JSON.parse(rawText); } catch (e) {}
-
-  if (!res.ok) {
-    const detail = data.error?.message || rawText || res.statusText;
-    throw new Error(`Gemini (${res.status}): ${detail}`);
-  }
-
-  return data.candidates[0].content.parts[0].text;
+  throw new Error(`Gemini falló en todos sus modelos. Último detalle: ${lastError}`);
 }
 
-// 2. Proveedor: xAI Grok (Requiere créditos en console.x.ai)
-async function callGrok(systemPrompt, messages) {
+// --- 2. PROVEEDOR GROK: Bucle con todos los identificadores de xAI ---
+async function callGrokWithFallbacks(systemPrompt, messages) {
   if (!GROK_API_KEY) {
     throw new Error("No se ha configurado GROK_API_KEY en Render.");
   }
@@ -86,33 +86,46 @@ async function callGrok(systemPrompt, messages) {
     }))
   ];
 
-  const res = await fetch('https://api.x.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROK_API_KEY.trim()}`
-    },
-    body: JSON.stringify({
-      model: 'grok-2-1212',
-      messages: formattedMessages,
-      max_tokens: 280,
-      temperature: 0.85
-    })
-  });
+  const grokModels = ['grok-2-1212', 'grok-2', 'grok-beta', 'grok-2-vision-1212'];
+  let lastError = '';
 
-  const rawText = await res.text();
-  let data = {};
-  try { data = JSON.parse(rawText); } catch (e) {}
+  for (const modelName of grokModels) {
+    try {
+      const res = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROK_API_KEY.trim()}`
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: formattedMessages,
+          max_tokens: 280,
+          temperature: 0.85
+        })
+      });
 
-  if (!res.ok) {
-    const errorMsg = data.error?.message || data.error || rawText || res.statusText;
-    throw new Error(`Grok (${res.status}): ${typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg}`);
+      const rawText = await res.text();
+      let data = {};
+      try { data = JSON.parse(rawText); } catch (e) {}
+
+      if (res.ok && data.choices?.[0]?.message?.content) {
+        console.log(`✅ Grok funcionó con: ${modelName}`);
+        return data.choices[0].message.content;
+      } else {
+        const errorMsg = data.error?.message || data.error || rawText || res.statusText;
+        lastError = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg;
+        console.warn(`⚠️ Falló Grok [${modelName}]:`, lastError);
+      }
+    } catch (err) {
+      lastError = err.message;
+    }
   }
 
-  return data.choices[0].message.content;
+  throw new Error(`Grok falló en todos sus modelos. Último detalle: ${lastError}`);
 }
 
-// 3. Proveedor: OpenAI (Requiere saldo en platform.openai.com)
+// --- 3. PROVEEDOR OPENAI ---
 async function callOpenAI(systemPrompt, messages) {
   if (!OPENAI_API_KEY) {
     throw new Error("No se ha configurado OPENAI_API_KEY en Render.");
@@ -152,7 +165,7 @@ async function callOpenAI(systemPrompt, messages) {
   return data.choices[0].message.content;
 }
 
-// Endpoint principal del Chat
+// --- ENDPOINT PRINCIPAL DE CHAT ---
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages, characterConfig, isAutoTrigger } = req.body;
@@ -184,29 +197,23 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
     let replyText = null;
     let errors = [];
 
-    // Intento 1: Gemini (Gratuito y con doble ruta v1beta / v1)
+    // 1. Probar bucle de Gemini
     try {
-      console.log("Intentando con Gemini...");
-      replyText = await callGemini(systemInstructionText, chatMessages);
-    } catch (geminiError) {
-      console.warn("Gemini falló. Cambiando a Grok... Motivo:", geminiError.message);
-      errors.push(`Gemini: ${geminiError.message}`);
+      replyText = await callGeminiWithFallbacks(systemInstructionText, chatMessages);
+    } catch (geminiErr) {
+      errors.push(geminiErr.message);
 
-      // Intento 2: Grok
+      // 2. Probar bucle de Grok
       try {
-        console.log("Intentando con Grok...");
-        replyText = await callGrok(systemInstructionText, chatMessages);
-      } catch (grokError) {
-        console.warn("Grok falló. Cambiando a OpenAI... Motivo:", grokError.message);
-        errors.push(`Grok: ${grokError.message}`);
+        replyText = await callGrokWithFallbacks(systemInstructionText, chatMessages);
+      } catch (grokErr) {
+        errors.push(grokErr.message);
 
-        // Intento 3: OpenAI
+        // 3. Probar OpenAI
         try {
-          console.log("Intentando con OpenAI...");
           replyText = await callOpenAI(systemInstructionText, chatMessages);
-        } catch (openAiError) {
-          console.error("OpenAI también falló:", openAiError.message);
-          errors.push(`OpenAI: ${openAiError.message}`);
+        } catch (openAiErr) {
+          errors.push(openAiErr.message);
           throw new Error(`Todos los proveedores fallaron:\n` + errors.join('\n'));
         }
       }
