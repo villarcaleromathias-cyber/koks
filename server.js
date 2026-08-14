@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 1. Proveedor: Google Gemini (Modelo oficial de alta velocidad)
+// 1. Proveedor: Google Gemini (Doble verificación v1beta / v1)
 async function callGemini(systemPrompt, messages) {
   if (!GEMINI_API_KEY) {
     throw new Error("No se ha configurado GEMINI_API_KEY en Render.");
@@ -26,21 +26,38 @@ async function callGemini(systemPrompt, messages) {
     parts: [{ text: m.content || m.text || '' }]
   }));
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+  const payload = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: contents,
+    generationConfig: { maxOutputTokens: 280, temperature: 0.85 }
+  };
 
-  const res = await fetch(url, {
+  // Intento A: Gemini 2.0 Flash (Endpoint v1beta)
+  try {
+    const url20 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+    const res = await fetch(url20, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const rawText = await res.text();
+    let data = {};
+    try { data = JSON.parse(rawText); } catch (e) {}
+
+    if (res.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+  } catch (e) {
+    console.warn("Gemini 2.0 Flash falló, probando Gemini 1.5 Flash...");
+  }
+
+  // Intento B: Gemini 1.5 Flash (Endpoint v1)
+  const url15 = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY.trim()}`;
+  const res = await fetch(url15, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: {
-        parts: [{ text: systemPrompt }]
-      },
-      contents: contents,
-      generationConfig: {
-        maxOutputTokens: 280,
-        temperature: 0.85
-      }
-    })
+    body: JSON.stringify(payload)
   });
 
   const rawText = await res.text();
@@ -55,7 +72,7 @@ async function callGemini(systemPrompt, messages) {
   return data.candidates[0].content.parts[0].text;
 }
 
-// 2. Proveedor: xAI Grok (Modelo grok-beta)
+// 2. Proveedor: xAI Grok (Requiere créditos en console.x.ai)
 async function callGrok(systemPrompt, messages) {
   if (!GROK_API_KEY) {
     throw new Error("No se ha configurado GROK_API_KEY en Render.");
@@ -76,7 +93,7 @@ async function callGrok(systemPrompt, messages) {
       'Authorization': `Bearer ${GROK_API_KEY.trim()}`
     },
     body: JSON.stringify({
-      model: 'grok-beta',
+      model: 'grok-2-1212',
       messages: formattedMessages,
       max_tokens: 280,
       temperature: 0.85
@@ -95,7 +112,7 @@ async function callGrok(systemPrompt, messages) {
   return data.choices[0].message.content;
 }
 
-// 3. Proveedor: OpenAI (ChatGPT)
+// 3. Proveedor: OpenAI (Requiere saldo en platform.openai.com)
 async function callOpenAI(systemPrompt, messages) {
   if (!OPENAI_API_KEY) {
     throw new Error("No se ha configurado OPENAI_API_KEY en Render.");
@@ -167,7 +184,7 @@ REGLAS OBLIGATORIAS DE FORMATO Y ESTILO (ESTILO TALKIE):
     let replyText = null;
     let errors = [];
 
-    // Intento 1: Gemini (Gratuito, rápido y estable)
+    // Intento 1: Gemini (Gratuito y con doble ruta v1beta / v1)
     try {
       console.log("Intentando con Gemini...");
       replyText = await callGemini(systemInstructionText, chatMessages);
