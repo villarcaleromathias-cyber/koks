@@ -13,6 +13,7 @@
   --accent-gold-hover: #f5b94c;
   --accent-gold-glow: rgba(229, 169, 60, 0.35);
   --accent-blue: #3b82f6;
+  --accent-red: #e74c3c;
   
   --text-main: #ffffff;
   --text-muted: #888888;
@@ -152,6 +153,7 @@ body {
   border: 1px solid transparent;
   border-radius: 14px;
   cursor: pointer;
+  position: relative;
   transition: transform 0.15s ease, border-color 0.2s ease;
 }
 
@@ -163,13 +165,15 @@ body {
   border-color: var(--border-color);
 }
 
+/* AVATARES ESTILO ANIME / ILUSTRACIÓN 2D */
 .chat-avatar {
   width: 50px;
   height: 50px;
   border-radius: 50%;
   object-fit: cover;
-  background-color: #333;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #222;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 
 .chat-info {
@@ -216,6 +220,7 @@ body {
   width: 100%;
   height: 160px;
   object-fit: cover;
+  display: block;
 }
 
 .char-card-body {
@@ -240,7 +245,7 @@ body {
 }
 
 /* ==========================================
-   FORMULARIO DE CREACIÓN & AVATAR
+   FORMULARIO DE CREACIÓN & AVATAR ANIME
    ========================================== */
 .avatar-toggle-tabs {
   display: flex;
@@ -269,7 +274,7 @@ body {
 
 .image-upload-box, .ai-image-box {
   width: 100%;
-  min-height: 110px;
+  min-height: 120px;
   border: 1px dashed var(--accent-gold);
   background: rgba(229, 169, 60, 0.03);
   border-radius: 12px;
@@ -288,12 +293,16 @@ body {
   text-align: center;
 }
 
+/* VISTA PREVIA DEL AVATAR IA ANIME */
 .image-preview {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: none;
+  z-index: 2;
 }
 
 .form-group {
@@ -404,7 +413,7 @@ body {
 }
 
 /* ==========================================
-   MODAL DE CHAT (ESTILO TALKIE CON BLUR)
+   MODAL DE CHAT Y FONDO NÍTIDO
    ========================================== */
 .chat-modal {
   position: absolute;
@@ -419,29 +428,29 @@ body {
 }
 
 .chat-modal.hidden {
-  display: none;
+  display: none !important;
 }
 
-/* FONDO CON DESENFOQUE TALKIE */
+/* FONDO DE CHAT NÍTIDO Y LIGERAMENTE OSCURECIDO */
 .chat-bg-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(25px) brightness(0.3);
-  transform: scale(1.15);
+  filter: brightness(0.4);
+  transform: scale(1.0);
   z-index: 1;
 }
 
 .chat-modal-header {
   position: relative;
-  z-index: 2;
+  z-index: 10;
   height: 56px;
   padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -478,24 +487,27 @@ body {
   color: #fff;
   font-size: 22px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 10px;
 }
 
-/* DROPDOWN MENU DE CHAT */
+/* ==========================================
+   CORRECCIÓN DE DROPDOWN Y ELIMINAR CHAT
+   ========================================== */
 .chat-dropdown {
   position: absolute;
   right: 12px;
-  top: 52px;
+  top: 54px;
   background: #1f1f24;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+  z-index: 120;
+  min-width: 160px;
 }
 
 .chat-dropdown.hidden {
-  display: none;
+  display: none !important;
 }
 
 .chat-dropdown button {
@@ -506,17 +518,29 @@ body {
   color: #fff;
   text-align: left;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  transition: background 0.15s ease;
 }
 
 .chat-dropdown button:hover {
-  background: var(--border-color);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* MENSAJES Y BURBUJAS */
+.chat-dropdown button.btn-delete-option {
+  color: #ff5555;
+}
+
+.chat-dropdown button.btn-delete-option:hover {
+  background: rgba(255, 85, 85, 0.15);
+}
+
+/* ==========================================
+   MENSAJES & ACCIONES EN PLOMO TRANSPARENTE
+   ========================================== */
 .chat-messages-container {
   position: relative;
   z-index: 2;
@@ -542,27 +566,32 @@ body {
   background: var(--accent-gold);
   color: #000;
   border-bottom-right-radius: 4px;
-  cursor: pointer;
 }
 
 .msg-char, .msg-bot {
   align-self: flex-start;
-  background: rgba(34, 34, 38, 0.75);
+  background: rgba(28, 28, 32, 0.85);
   backdrop-filter: blur(8px);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom-left-radius: 4px;
 }
 
-/* FORMATEO DE ACCIONES EN PLOMO TRANSPARENTE CON ITALICA */
-.msg-char .action-text, .msg-bot .action-text {
-  color: rgba(255, 255, 255, 0.55);
+/* FORMATEO DE ACCIONES (*acción*) EN PLOMO TRANSPARENTE CON ITÁLICA */
+.action-text {
   font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.2px;
 }
 
+/* Para el personaje: Plomo suave transparente sobre fondo oscuro */
+.msg-char .action-text, .msg-bot .action-text {
+  color: rgba(220, 220, 225, 0.62);
+}
+
+/* Para el usuario: Plomo oscuro transparente sobre fondo dorado */
 .msg-user .action-text {
-  color: rgba(0, 0, 0, 0.6);
-  font-style: italic;
+  color: rgba(30, 30, 30, 0.65);
 }
 
 .typing-indicator {
@@ -579,7 +608,7 @@ body {
 /* BARRA DE HERRAMIENTAS Y BOTÓN RAYITO ⚡ */
 .chat-tools-bar {
   position: relative;
-  z-index: 2;
+  z-index: 5;
   padding: 4px 12px;
   display: flex;
   justify-content: flex-end;
@@ -587,10 +616,10 @@ body {
 }
 
 .btn-tool {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ccc;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 12px;
   font-size: 11px;
   cursor: pointer;
@@ -599,18 +628,18 @@ body {
 }
 
 .btn-tool:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
 .chat-input-bar {
   position: relative;
-  z-index: 2;
+  z-index: 5;
   padding: 10px 12px 14px;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(10px);
 }
 
@@ -671,12 +700,12 @@ body {
 }
 
 /* ==========================================
-   MODALES DE DIÁLOGO / FICHA DE PERSONAJE
+   MODALES DE DIÁLOGO / CONFIRMACIÓN Y ELIMINACIÓN
    ========================================== */
 .modal-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(6px);
   z-index: 200;
   display: flex;
@@ -686,7 +715,7 @@ body {
 }
 
 .modal-overlay.hidden {
-  display: none;
+  display: none !important;
 }
 
 .modal-card {
@@ -701,8 +730,8 @@ body {
 }
 
 .card-avatar-large {
-  width: 84px;
-  height: 84px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
@@ -758,6 +787,18 @@ body {
   background: var(--accent-gold);
   border: none;
   color: #000;
+  font-weight: bold;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-danger {
+  flex: 1;
+  padding: 10px;
+  background: var(--accent-red);
+  border: none;
+  color: #fff;
   font-weight: bold;
   border-radius: 10px;
   cursor: pointer;
