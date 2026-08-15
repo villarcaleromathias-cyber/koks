@@ -1,53 +1,70 @@
-const PERSONALITIES = [
-  "Cariñosa", "Tsundere", "Yandere", "Fría / Distante", "Dominante", 
-  "Sumisa", "Celosa", "Divertida", "Misteriosa", "Gamer / Otaku", 
-  "Protectora", "Coqueta", "Inteligente", "Rebelde", "Energética"
+// --- ESTADO GLOBAL DE LA APLICACIÓN ---
+let characters = JSON.parse(localStorage.getItem('talkie_characters')) || [
+  {
+    id: 'char_default_1',
+    name: 'Agnes Tachyon',
+    gender: 'Femenino',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+    relationship: 'Compañera de laboratorio',
+    tone: 'Científica curiosa',
+    scenario: 'En el laboratorio probando un nuevo brebaje experimental.',
+    personality: 'Extravagante, perspicaz, enfocada en la investigación.',
+    config: 'Le apasiona la ciencia y habla con metáforas de experimentos.',
+    intro: 'Científica atrevida apasionada por la investigación.',
+    prologue: '*Ajusta sus lentes y te observa fijamente* ¿Has venido a participar en mi nuevo experimento?'
+  }
 ];
 
-// Coloca aquí tu Client ID de Google Cloud OAuth
-const GOOGLE_CLIENT_ID = "52700461638-j9sqlt044m6t14krnkmlfiq0trfe2ct3.apps.googleusercontent.com";
-
-let currentSelectedGender = "Hombre";
+let activeCharacter = null;
+let selectedGender = 'Hombre';
 let selectedPersonalities = [];
-let currentImageBase64 = "https://via.placeholder.com/150";
-let currentActiveCharId = null;
+let editingMsgIndex = null;
+let currentAvatarUrl = '';
 
-let driveAccessToken = null;
-let driveFileId = null;
+const PERSONALITY_OPTIONS = [
+  'Coqueto', 'Frío', 'Tsundere', 'Protector', 'Misterioso', 
+  'Divertido', 'Celoso', 'Intelectual', 'Cariñoso', 'Amigable',
+  'Dominante', 'Tímido', 'Rebelde', 'Leal', 'Energético'
+];
 
-let appData = {
-  characters: [],
-  chats: {}
-};
-
+// --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
-  renderPersonalitiesChips();
-  loadLocalData();
-  renderCharactersGrid();
+  renderPersonalityChips();
+  renderExploreGrid();
   renderMessagesList();
+  checkDriveAuthOnLoad();
 });
 
+// --- NAVEGACIÓN DE PESTAÑAS ---
 function switchTab(tabName, element) {
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
   
   document.getElementById(`tab-${tabName}`).classList.add('active');
   element.classList.add('active');
 }
 
-function renderPersonalitiesChips() {
+// --- CONFIGURACIÓN DE CHIPS Y GÉNERO ---
+function renderPersonalityChips() {
   const container = document.getElementById('personality-chips');
+  if (!container) return;
   container.innerHTML = '';
-  PERSONALITIES.forEach(p => {
+  
+  PERSONALITY_OPTIONS.forEach(p => {
     const chip = document.createElement('div');
     chip.className = 'chip';
     chip.innerText = p;
     chip.onclick = () => {
-      chip.classList.toggle('active');
       if (selectedPersonalities.includes(p)) {
-        selectedPersonalities = selectedPersonalities.filter(item => item !== p);
+        selectedPersonalities = selectedPersonalities.filter(x => x !== p);
+        chip.classList.remove('selected');
       } else {
-        selectedPersonalities.push(p);
+        if (selectedPersonalities.length < 3) {
+          selectedPersonalities.push(p);
+          chip.classList.add('selected');
+        } else {
+          alert('Máximo 3 personalidades');
+        }
       }
     };
     container.appendChild(chip);
@@ -57,29 +74,56 @@ function renderPersonalitiesChips() {
 function selectGender(btn, gender) {
   document.querySelectorAll('.btn-gender').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  currentSelectedGender = gender;
+  selectedGender = gender;
+}
+
+// --- CREACIÓN DE FOTO DE PERFIL (SUBIR O IA) ---
+function switchAvatarMode(mode) {
+  document.querySelectorAll('.tab-avatar-btn').forEach(b => b.classList.remove('active'));
+  if (mode === 'upload') {
+    event.target.classList.add('active');
+    document.getElementById('avatar-mode-upload').classList.remove('hidden');
+    document.getElementById('avatar-mode-ai').classList.add('hidden');
+  } else {
+    event.target.classList.add('active');
+    document.getElementById('avatar-mode-upload').classList.add('hidden');
+    document.getElementById('avatar-mode-ai').classList.remove('hidden');
+  }
 }
 
 function previewImage(event) {
   const file = event.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      currentImageBase64 = e.target.result;
-      const img = document.getElementById('image-preview');
-      img.src = currentImageBase64;
-      img.style.display = 'block';
-    }
-    reader.readAsDataURL(file);
-  }
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    currentAvatarUrl = e.target.result;
+    const img = document.getElementById('image-preview');
+    img.src = currentAvatarUrl;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
 }
 
-function parseAsterisks(text) {
-  if (!text) return '';
-  let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return safeText.replace(/\*([^*]+)\*/g, '<span class="action-text">* $1 *</span>');
+function generateAIAvatar() {
+  const prompt = document.getElementById('ai-image-prompt').value.trim();
+  if (!prompt) return alert("Escribe una breve descripción para la foto.");
+
+  const spinner = document.getElementById('ai-loading-spinner');
+  spinner.classList.remove('hidden');
+
+  // API gratuita de Pollinations.ai
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+
+  const imgTester = new Image();
+  imgTester.src = imageUrl;
+  imgTester.onload = () => {
+    currentAvatarUrl = imageUrl;
+    alert("✨ ¡Imagen generada con éxito!");
+    spinner.classList.add('hidden');
+  };
 }
 
+// --- CREAR PERSONAJE ---
 function createNewCharacter() {
   const name = document.getElementById('char-name').value.trim();
   const config = document.getElementById('char-config').value.trim();
@@ -87,320 +131,338 @@ function createNewCharacter() {
   const prologue = document.getElementById('char-prologue').value.trim();
 
   if (!name || !config || !intro || !prologue) {
-    alert("Por favor completa todos los campos marcados con (*)");
-    return;
+    return alert("Por favor completa todos los campos obligatorios (*)");
   }
 
   const newChar = {
-    id: "char_" + Date.now(),
+    id: 'char_' + Date.now(),
     name,
-    gender: currentSelectedGender,
-    personality: selectedPersonalities.join(", ") || "Normal",
+    gender: selectedGender,
+    avatar: currentAvatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+    relationship: document.getElementById('char-relationship').value.trim() || 'Amigos',
+    tone: document.getElementById('char-tone').value.trim() || 'Neutral',
+    scenario: document.getElementById('char-scenario').value.trim() || '',
+    personality: selectedPersonalities.join(', '),
     config,
     intro,
-    prologue,
-    image: currentImageBase64
+    prologue
   };
 
-  appData.characters.push(newChar);
-  appData.chats[newChar.id] = [
-    { sender: 'char', text: prologue }
-  ];
+  characters.unshift(newChar);
+  localStorage.setItem('talkie_characters', JSON.stringify(characters));
 
-  saveData();
-  alert("¡Personaje creado exitosamente!");
-  
-  document.getElementById('char-name').value = '';
-  document.getElementById('char-config').value = '';
-  document.getElementById('char-intro').value = '';
-  document.getElementById('char-prologue').value = '';
-  
-  renderCharactersGrid();
+  // Inicializar historial con el prólogo
+  saveChatHistory(newChar.id, [{ role: 'assistant', content: newChar.prologue }]);
+
+  renderExploreGrid();
   renderMessagesList();
-  switchTab('explore', document.querySelectorAll('.nav-item')[1]);
+  openChat(newChar);
+  autoSyncDrive();
 }
 
-function renderCharactersGrid() {
+// --- RENDERIZADO DE VISTAS LOBBY ---
+function renderExploreGrid() {
   const grid = document.getElementById('characters-grid');
+  if (!grid) return;
   grid.innerHTML = '';
 
-  if (appData.characters.length === 0) {
-    grid.innerHTML = '<p style="grid-column: span 2; color: #666;">No hay personajes aún.</p>';
-    return;
-  }
-
-  appData.characters.forEach(char => {
+  characters.forEach(c => {
     const card = document.createElement('div');
-    card.className = 'char-card';
-    card.onclick = () => openChat(char.id);
+    card.style.cssText = `
+      background: var(--bg-card); border-radius: 12px; padding: 12px;
+      display: flex; gap: 12px; align-items: center; cursor: pointer; margin-bottom: 10px;
+    `;
     card.innerHTML = `
-      <img src="${char.image}" alt="${char.name}">
-      <div class="char-card-body">
-        <div class="char-card-title">${char.name}</div>
-        <div class="char-card-intro">${char.intro}</div>
+      <img src="${c.avatar}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
+      <div>
+        <h4 style="margin-bottom:2px;">${c.name}</h4>
+        <p style="font-size:0.75rem; color: var(--text-muted);">${c.intro}</p>
       </div>
     `;
+    card.onclick = () => openChat(c);
     grid.appendChild(card);
   });
 }
 
 function renderMessagesList() {
   const list = document.getElementById('chats-list');
+  if (!list) return;
   list.innerHTML = '';
 
-  const activeChats = Object.keys(appData.chats);
-  if (activeChats.length === 0) {
-    list.innerHTML = '<p style="color: #666;">No hay chats activos.</p>';
-    return;
-  }
-
-  activeChats.forEach(charId => {
-    const char = appData.characters.find(c => c.id === charId);
-    if (!char) return;
-
-    const msgs = appData.chats[charId];
-    const lastMsg = msgs[msgs.length - 1]?.text || "...";
-
-    const item = document.createElement('div');
-    item.className = 'chat-item';
-    item.onclick = () => openChat(char.id);
-    item.innerHTML = `
-      <img src="${char.image}" class="chat-avatar">
-      <div class="chat-info">
-        <div class="chat-name">${char.name}</div>
-        <div class="chat-last-msg">${lastMsg.replace(/\*/g, '')}</div>
-      </div>
-    `;
-    list.appendChild(item);
+  characters.forEach(c => {
+    const history = getChatHistory(c.id);
+    if (history.length > 0) {
+      const lastMsg = history[history.length - 1].content;
+      const card = document.createElement('div');
+      card.style.cssText = `
+        background: var(--bg-card); border-radius: 12px; padding: 12px;
+        display: flex; gap: 12px; align-items: center; cursor: pointer; margin-bottom: 10px;
+      `;
+      card.innerHTML = `
+        <img src="${c.avatar}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
+        <div style="flex:1; overflow:hidden;">
+          <h4 style="margin-bottom:2px;">${c.name}</h4>
+          <p style="font-size:0.75rem; color: var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${lastMsg}</p>
+        </div>
+      `;
+      card.onclick = () => openChat(c);
+      list.appendChild(card);
+    }
   });
 }
 
-function openChat(charId) {
-  currentActiveCharId = charId;
-  const char = appData.characters.find(c => c.id === charId);
+// --- SISTEMA DE CHAT EN VIVO ---
+function openChat(character) {
+  activeCharacter = character;
   
-  document.getElementById('chat-header-avatar').src = char.image;
-  document.getElementById('chat-header-name').innerText = char.name;
+  document.getElementById('chat-header-name').innerText = character.name;
+  document.getElementById('chat-header-avatar').src = character.avatar;
   
-  renderChatMessages();
+  // Establecer fondo difuminado
+  const bgOverlay = document.getElementById('chat-bg-overlay');
+  bgOverlay.style.backgroundImage = `url('${character.avatar}')`;
+
   document.getElementById('chat-modal').classList.remove('hidden');
+  renderChatMessages();
 }
 
 function closeChat() {
   document.getElementById('chat-modal').classList.add('hidden');
+  activeCharacter = null;
   renderMessagesList();
+}
+
+function getChatHistory(charId) {
+  return JSON.parse(localStorage.getItem(`talkie_chat_${charId}`)) || [];
+}
+
+function saveChatHistory(charId, history) {
+  localStorage.setItem(`talkie_chat_${charId}`, JSON.stringify(history));
 }
 
 function renderChatMessages() {
   const container = document.getElementById('chat-messages-container');
   container.innerHTML = '';
 
-  const msgs = appData.chats[currentActiveCharId] || [];
-  msgs.forEach(m => {
+  const history = getChatHistory(activeCharacter.id);
+
+  history.forEach((msg, index) => {
     const bubble = document.createElement('div');
-    bubble.className = `msg-bubble ${m.sender === 'user' ? 'msg-user' : 'msg-char'}`;
-    bubble.innerHTML = parseAsterisks(m.text);
+    const isUser = msg.role === 'user';
+    bubble.className = `msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}`;
+    bubble.innerText = msg.content;
+
+    // Permitir editar mensajes de usuario al hacer clic
+    if (isUser) {
+      bubble.title = "Haz clic para editar este mensaje";
+      bubble.onclick = () => openEditMessageModal(index, msg.content);
+    }
+
     container.appendChild(bubble);
   });
-  
+
   container.scrollTop = container.scrollHeight;
 }
 
+// --- ENVIAR MENSAJE A LA IA ---
 async function sendMessage() {
   const input = document.getElementById('user-input');
   const text = input.value.trim();
-  if (!text || !currentActiveCharId) return;
+  if (!text || !activeCharacter) return;
 
   input.value = '';
-  appData.chats[currentActiveCharId].push({ sender: 'user', text });
+  let history = getChatHistory(activeCharacter.id);
+  history.push({ role: 'user', content: text });
+  
+  saveChatHistory(activeCharacter.id, history);
   renderChatMessages();
-  saveData();
 
-  await requestAIReply(false);
+  await requestAIResponse(history);
 }
 
-async function triggerLightningAuto() {
-  if (!currentActiveCharId) return;
-  await requestAIReply(true);
-}
-
-async function regenerateLastMessage() {
-  if (!currentActiveCharId) return;
-  const msgs = appData.chats[currentActiveCharId];
-  if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'char') {
-    msgs.pop();
-    renderChatMessages();
-    await requestAIReply(false);
-  }
-}
-
-async function requestAIReply(isAutoTrigger) {
-  const char = appData.characters.find(c => c.id === currentActiveCharId);
-  const container = document.getElementById('chat-messages-container');
-
-  const typing = document.createElement('div');
-  typing.className = 'typing-indicator';
-  typing.id = 'typing-indicator';
-  typing.innerText = `${char.name} está respondiendo...`;
-  container.appendChild(typing);
-  container.scrollTop = container.scrollHeight;
-
-  const apiMessages = appData.chats[currentActiveCharId].map(m => ({
-    role: m.sender === 'user' ? 'user' : 'assistant',
-    content: m.text
-  }));
-
+async function requestAIResponse(history) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: apiMessages,
-        characterConfig: char,
-        isAutoTrigger
+        messages: history,
+        characterConfig: activeCharacter,
+        isAutoTrigger: false
       })
     });
 
     const data = await res.json();
-    document.getElementById('typing-indicator')?.remove();
-
     if (data.reply) {
-      appData.chats[currentActiveCharId].push({ sender: 'char', text: data.reply });
+      history.push({ role: 'assistant', content: data.reply });
+      saveChatHistory(activeCharacter.id, history);
       renderChatMessages();
-      saveData();
+      autoSyncDrive();
     } else {
-      alert("Error en la IA: " + (data.error || "No hubo respuesta"));
+      alert("Error: " + (data.error || "No hubo respuesta"));
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error conectando con el servidor");
+  }
+}
+
+// --- HERRAMIENTAS TALKIE (RAYITO Y RE-INTENTAR) ---
+async function triggerLightningAuto() {
+  if (!activeCharacter) return;
+  let history = getChatHistory(activeCharacter.id);
+  
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: history,
+        characterConfig: activeCharacter,
+        isAutoTrigger: true
+      })
+    });
+    const data = await res.json();
+    if (data.reply) {
+      history.push({ role: 'assistant', content: data.reply });
+      saveChatHistory(activeCharacter.id, history);
+      renderChatMessages();
+      autoSyncDrive();
     }
   } catch (e) {
-    document.getElementById('typing-indicator')?.remove();
-    console.error("Error enviando mensaje:", e);
+    alert("Falló la acción automática.");
   }
+}
+
+async function regenerateLastMessage() {
+  if (!activeCharacter) return;
+  let history = getChatHistory(activeCharacter.id);
+  
+  if (history.length > 0 && history[history.length - 1].role === 'assistant') {
+    history.pop(); // Eliminar la última respuesta de la IA
+    saveChatHistory(activeCharacter.id, history);
+    renderChatMessages();
+    await requestAIResponse(history);
+  }
+}
+
+// --- EDICIÓN DE MENSAJES DE USUARIO ---
+function openEditMessageModal(index, text) {
+  editingMsgIndex = index;
+  document.getElementById('edit-message-text').value = text;
+  document.getElementById('edit-message-modal').classList.remove('hidden');
+}
+
+function closeEditMessageModal() {
+  document.getElementById('edit-message-modal').classList.add('hidden');
+  editingMsgIndex = null;
+}
+
+async function confirmMessageEdit() {
+  const newText = document.getElementById('edit-message-text').value.trim();
+  if (!newText || editingMsgIndex === null) return;
+
+  let history = getChatHistory(activeCharacter.id);
+  
+  // Cortar el historial hasta antes del mensaje editado y agregar el nuevo
+  history = history.slice(0, editingMsgIndex);
+  history.push({ role: 'user', content: newText });
+
+  saveChatHistory(activeCharacter.id, history);
+  closeEditMessageModal();
+  renderChatMessages();
+
+  await requestAIResponse(history);
+}
+
+// --- MENÚ 3 PUNTOS & FICHA ---
+function toggleChatDropdown(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('chat-dropdown-menu');
+  dropdown.classList.toggle('hidden');
+}
+
+document.addEventListener('click', () => {
+  const dropdown = document.getElementById('chat-dropdown-menu');
+  if (dropdown) dropdown.classList.add('hidden');
+});
+
+function clearChatHistory() {
+  if (!activeCharacter) return;
+  if (confirm(`¿Eliminar la conversación con ${activeCharacter.name}?`)) {
+    saveChatHistory(activeCharacter.id, [{ role: 'assistant', content: activeCharacter.prologue }]);
+    renderChatMessages();
+    autoSyncDrive();
+  }
+}
+
+function openCharacterCard() {
+  if (!activeCharacter) return;
+  document.getElementById('card-avatar').src = activeCharacter.avatar;
+  document.getElementById('card-name').innerText = activeCharacter.name;
+  document.getElementById('card-relationship-tag').innerText = `Relación: ${activeCharacter.relationship}`;
+  document.getElementById('card-tone-tag').innerText = `Tono: ${activeCharacter.tone}`;
+  document.getElementById('card-intro').innerText = activeCharacter.intro;
+  document.getElementById('card-scenario').innerText = activeCharacter.scenario || 'Sin escenario definido.';
+
+  document.getElementById('character-card-modal').classList.remove('hidden');
+}
+
+function closeCharacterCard() {
+  document.getElementById('character-card-modal').classList.add('hidden');
 }
 
 function handleKeyPress(e) {
   if (e.key === 'Enter') sendMessage();
 }
 
-// GUARDA LOCALMENTE Y EN GOOGLE DRIVE
-function saveData() {
-  localStorage.setItem('talkie_app_data', JSON.stringify(appData));
-  if (driveAccessToken) {
-    syncToGoogleDrive();
+// --- GOOGLE DRIVE INTEGRACIÓN PERSISTENTE ---
+function checkDriveAuthOnLoad() {
+  const token = localStorage.getItem('gdrive_token');
+  if (token) {
+    document.getElementById('drive-status').innerText = 'Drive Conectado';
   }
 }
-
-function loadLocalData() {
-  const saved = localStorage.getItem('talkie_app_data');
-  if (saved) {
-    try { appData = JSON.parse(saved); } catch(e){}
-  }
-}
-
-// -------------------------------------------------------------
-// LOGICA DE AUTENTICACION Y SINCRONIZACIÓN CON GOOGLE DRIVE
-// -------------------------------------------------------------
 
 function handleDriveAuth() {
-  if (GOOGLE_CLIENT_ID.includes("TU_GOOGLE_CLIENT_ID")) {
-    alert("Por favor configura tu GOOGLE_CLIENT_ID en app.js");
-    return;
-  }
-
-  const client = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
+  google.accounts.oauth2.initTokenClient({
+    client_id: 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com', // Reemplaza con tu Client ID
     scope: 'https://www.googleapis.com/auth/drive.file',
-    callback: async (response) => {
+    callback: (response) => {
       if (response.access_token) {
-        driveAccessToken = response.access_token;
-        document.getElementById('drive-status').innerText = 'Conectado ✓';
-        document.getElementById('btn-drive').style.borderColor = '#2ec4b6';
-        
-        // Cargar copia de seguridad desde Google Drive
-        await loadFromGoogleDrive();
+        localStorage.setItem('gdrive_token', response.access_token);
+        document.getElementById('drive-status').innerText = 'Drive Conectado';
+        alert("¡Conectado exitosamente con Google Drive!");
+        autoSyncDrive();
       }
     }
-  });
-  client.requestAccessToken();
+  }).requestAccessToken();
 }
 
-async function syncToGoogleDrive() {
-  if (!driveAccessToken) return;
-
-  const fileContent = JSON.stringify(appData);
-  const metadata = {
-    name: 'talkie_backup.json',
-    mimeType: 'application/json'
-  };
-
-  try {
-    if (!driveFileId) {
-      // Buscar si el archivo ya existe en Google Drive
-      const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='talkie_backup.json' and trashed=false", {
-        headers: { Authorization: `Bearer ${driveAccessToken}` }
-      });
-      const searchData = await searchRes.json();
-      
-      if (searchData.files && searchData.files.length > 0) {
-        driveFileId = searchData.files[0].id;
-      }
-    }
-
-    if (driveFileId) {
-      // Actualizar archivo existente
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${driveAccessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: fileContent
-      });
-    } else {
-      // Crear nuevo archivo si no existe
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', new Blob([fileContent], { type: 'application/json' }));
-
-      const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${driveAccessToken}` },
-        body: form
-      });
-      const createData = await createRes.json();
-      driveFileId = createData.id;
-    }
-    console.log("Datos sincronizados en Google Drive correctamente.");
-  } catch (err) {
-    console.error("Error al sincronizar con Google Drive:", err);
-  }
+function triggerManualSync() {
+  autoSyncDrive(true);
 }
 
-async function loadFromGoogleDrive() {
+async function autoSyncDrive(isManual = false) {
+  const token = localStorage.getItem('gdrive_token');
+  if (!token) return;
+
+  const backupData = JSON.stringify(localStorage);
+
   try {
-    const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?q=name='talkie_backup.json' and trashed=false", {
-      headers: { Authorization: `Bearer ${driveAccessToken}` }
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=media', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: backupData
     });
-    const searchData = await searchRes.json();
 
-    if (searchData.files && searchData.files.length > 0) {
-      driveFileId = searchData.files[0].id;
-      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
-        headers: { Authorization: `Bearer ${driveAccessToken}` }
-      });
-      const driveData = await fileRes.json();
-
-      if (driveData && driveData.characters) {
-        appData = driveData;
-        saveData();
-        renderCharactersGrid();
-        renderMessagesList();
-        alert("¡Datos cargados con éxito desde tu Google Drive!");
-      }
-    } else {
-      // Si el archivo no existe, lo crea por primera vez
-      await syncToGoogleDrive();
+    if (res.ok && isManual) {
+      alert("☁️ ¡Copia guardada en Google Drive correctamente!");
     }
   } catch (err) {
-    console.error("Error al cargar datos desde Google Drive:", err);
+    console.warn("Auto-sync Drive falló:", err);
   }
 }
