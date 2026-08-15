@@ -127,7 +127,7 @@ function generateAIAvatar() {
   const spinner = document.getElementById('ai-loading-spinner');
   if (spinner) spinner.classList.remove('hidden');
 
-  // MODIFICACIÓN: Forzar estilo Anime 2D / No Realista
+  // Estilo Anime 2D / Ilustración
   const animePrompt = `${userPrompt}, anime style, 2D illustration, cel shaded, anime character design, digital art, vibrant colors, non-realistic`;
   const encodedPrompt = encodeURIComponent(animePrompt);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
@@ -243,13 +243,11 @@ function renderMessagesList() {
 // ==========================================
 function formatMessageText(text) {
   if (!text) return '';
-  // Escapar HTML básico para evitar inyecciones
   const escaped = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Reemplazar *texto* con la clase CSS .action-text
   return escaped.replace(/\*(.*?)\*/g, '<span class="action-text">*$1*</span>');
 }
 
@@ -301,7 +299,6 @@ function renderChatMessages() {
     const isUser = msg.role === 'user';
     bubble.className = `msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}`;
     
-    // Aplicar formateo para texto y acciones (*acción*)
     bubble.innerHTML = formatMessageText(msg.content);
 
     if (isUser) {
@@ -421,7 +418,7 @@ async function regenerateLastMessage() {
   let history = getChatHistory(activeCharacter.id);
   
   if (history.length > 0 && history[history.length - 1].role === 'assistant') {
-    history.pop(); // Eliminar la última respuesta de la IA
+    history.pop();
     saveChatHistory(activeCharacter.id, history);
     renderChatMessages();
     await requestAIResponse(history);
@@ -454,7 +451,6 @@ async function confirmMessageEdit() {
 
   let history = getChatHistory(activeCharacter.id);
   
-  // Recortar historial hasta el mensaje editado
   history = history.slice(0, editingMsgIndex);
   history.push({ role: 'user', content: newText });
 
@@ -493,11 +489,9 @@ function deleteCurrentCharacter() {
   if (confirm(`¿Estás seguro de eliminar a "${activeCharacter.name}" y toda su conversación?`)) {
     const charId = activeCharacter.id;
     
-    // Eliminar de la lista de personajes
     characters = characters.filter(c => c.id !== charId);
     localStorage.setItem('talkie_characters', JSON.stringify(characters));
     
-    // Eliminar historial
     localStorage.removeItem(`talkie_chat_${charId}`);
     
     closeChat();
@@ -546,7 +540,7 @@ function handleDriveAuth() {
   }
   
   google.accounts.oauth2.initTokenClient({
-    client_id: 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com', // Reemplaza con tu Client ID
+    client_id: '135044209448-375gbgke6br5bg3j94osjvs52epp7evr.apps.googleusercontent.com',
     scope: 'https://www.googleapis.com/auth/drive.file',
     callback: (response) => {
       if (response.access_token) {
