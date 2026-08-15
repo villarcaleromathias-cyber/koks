@@ -1,4 +1,6 @@
-// --- ESTADO GLOBAL DE LA APLICACIÓN ---
+// ==========================================
+// ESTADO GLOBAL DE LA APLICACIÓN
+// ==========================================
 let characters = JSON.parse(localStorage.getItem('talkie_characters')) || [
   {
     id: 'char_default_1',
@@ -11,7 +13,7 @@ let characters = JSON.parse(localStorage.getItem('talkie_characters')) || [
     personality: 'Extravagante, perspicaz, enfocada en la investigación.',
     config: 'Le apasiona la ciencia y habla con metáforas de experimentos.',
     intro: 'Científica atrevida apasionada por la investigación.',
-    prologue: '*Ajusta sus lentes y te observa fijamente* ¿Has venido a participar en mi nuevo experimento?'
+    prologue: '*Ajusta sus lentes y te observa fijamente con una sonrisa curiosa* ¿Has venido a participar en mi nuevo experimento?'
   }
 ];
 
@@ -27,7 +29,9 @@ const PERSONALITY_OPTIONS = [
   'Dominante', 'Tímido', 'Rebelde', 'Leal', 'Energético'
 ];
 
-// --- INICIALIZACIÓN ---
+// ==========================================
+// INICIALIZACIÓN
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   renderPersonalityChips();
   renderExploreGrid();
@@ -35,16 +39,21 @@ document.addEventListener('DOMContentLoaded', () => {
   checkDriveAuthOnLoad();
 });
 
-// --- NAVEGACIÓN DE PESTAÑAS ---
+// ==========================================
+// NAVEGACIÓN DE PESTAÑAS
+// ==========================================
 function switchTab(tabName, element) {
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
   
-  document.getElementById(`tab-${tabName}`).classList.add('active');
-  element.classList.add('active');
+  const selectedTab = document.getElementById(`tab-${tabName}`);
+  if (selectedTab) selectedTab.classList.add('active');
+  if (element) element.classList.add('active');
 }
 
-// --- CONFIGURACIÓN DE CHIPS Y GÉNERO ---
+// ==========================================
+// CONFIGURACIÓN DE CHIPS Y GÉNERO
+// ==========================================
 function renderPersonalityChips() {
   const container = document.getElementById('personality-chips');
   if (!container) return;
@@ -77,17 +86,22 @@ function selectGender(btn, gender) {
   selectedGender = gender;
 }
 
-// --- CREACIÓN DE FOTO DE PERFIL (SUBIR O IA) ---
-function switchAvatarMode(mode) {
+// ==========================================
+// CREACIÓN DE FOTO DE PERFIL (SUBIR O IA ANIME)
+// ==========================================
+function switchAvatarMode(mode, evt) {
   document.querySelectorAll('.tab-avatar-btn').forEach(b => b.classList.remove('active'));
+  if (evt && evt.target) evt.target.classList.add('active');
+
+  const uploadBox = document.getElementById('avatar-mode-upload');
+  const aiBox = document.getElementById('avatar-mode-ai');
+
   if (mode === 'upload') {
-    event.target.classList.add('active');
-    document.getElementById('avatar-mode-upload').classList.remove('hidden');
-    document.getElementById('avatar-mode-ai').classList.add('hidden');
+    if (uploadBox) uploadBox.classList.remove('hidden');
+    if (aiBox) aiBox.classList.add('hidden');
   } else {
-    event.target.classList.add('active');
-    document.getElementById('avatar-mode-upload').classList.add('hidden');
-    document.getElementById('avatar-mode-ai').classList.remove('hidden');
+    if (uploadBox) uploadBox.classList.add('hidden');
+    if (aiBox) aiBox.classList.remove('hidden');
   }
 }
 
@@ -98,32 +112,47 @@ function previewImage(event) {
   reader.onload = function(e) {
     currentAvatarUrl = e.target.result;
     const img = document.getElementById('image-preview');
-    img.src = currentAvatarUrl;
-    img.style.display = 'block';
+    if (img) {
+      img.src = currentAvatarUrl;
+      img.style.display = 'block';
+    }
   };
   reader.readAsDataURL(file);
 }
 
 function generateAIAvatar() {
-  const prompt = document.getElementById('ai-image-prompt').value.trim();
-  if (!prompt) return alert("Escribe una breve descripción para la foto.");
+  const userPrompt = document.getElementById('ai-image-prompt').value.trim();
+  if (!userPrompt) return alert("Escribe una breve descripción para la foto.");
 
   const spinner = document.getElementById('ai-loading-spinner');
-  spinner.classList.remove('hidden');
+  if (spinner) spinner.classList.remove('hidden');
 
-  // API gratuita de Pollinations.ai
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true&seed=${Math.floor(Math.random()*1000)}`;
+  // MODIFICACIÓN: Forzar estilo Anime 2D / No Realista
+  const animePrompt = `${userPrompt}, anime style, 2D illustration, cel shaded, anime character design, digital art, vibrant colors, non-realistic`;
+  const encodedPrompt = encodeURIComponent(animePrompt);
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
 
   const imgTester = new Image();
   imgTester.src = imageUrl;
   imgTester.onload = () => {
     currentAvatarUrl = imageUrl;
-    alert("✨ ¡Imagen generada con éxito!");
-    spinner.classList.add('hidden');
+    const img = document.getElementById('image-preview');
+    if (img) {
+      img.src = currentAvatarUrl;
+      img.style.display = 'block';
+    }
+    alert("✨ ¡Foto de perfil estilo anime generada con éxito!");
+    if (spinner) spinner.classList.add('hidden');
+  };
+  imgTester.onerror = () => {
+    alert("Error al generar la imagen. Inténtalo de nuevo.");
+    if (spinner) spinner.classList.add('hidden');
   };
 }
 
-// --- CREAR PERSONAJE ---
+// ==========================================
+// CREAR PERSONAJE
+// ==========================================
 function createNewCharacter() {
   const name = document.getElementById('char-name').value.trim();
   const config = document.getElementById('char-config').value.trim();
@@ -160,7 +189,9 @@ function createNewCharacter() {
   autoSyncDrive();
 }
 
-// --- RENDERIZADO DE VISTAS LOBBY ---
+// ==========================================
+// RENDERIZADO DE VISTAS LOBBY
+// ==========================================
 function renderExploreGrid() {
   const grid = document.getElementById('characters-grid');
   if (!grid) return;
@@ -168,18 +199,16 @@ function renderExploreGrid() {
 
   characters.forEach(c => {
     const card = document.createElement('div');
-    card.style.cssText = `
-      background: var(--bg-card); border-radius: 12px; padding: 12px;
-      display: flex; gap: 12px; align-items: center; cursor: pointer; margin-bottom: 10px;
-    `;
+    card.className = 'char-card';
+    card.onclick = () => openChat(c);
+
     card.innerHTML = `
-      <img src="${c.avatar}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
-      <div>
-        <h4 style="margin-bottom:2px;">${c.name}</h4>
-        <p style="font-size:0.75rem; color: var(--text-muted);">${c.intro}</p>
+      <img src="${c.avatar}" alt="${c.name}" class="chat-avatar" style="width:100%; height:140px; border-radius:12px 12px 0 0; object-fit:cover;">
+      <div class="char-card-body" style="padding:10px;">
+        <h4 class="char-card-title">${c.name}</h4>
+        <p class="char-card-intro">${c.intro}</p>
       </div>
     `;
-    card.onclick = () => openChat(c);
     grid.appendChild(card);
   });
 }
@@ -194,40 +223,59 @@ function renderMessagesList() {
     if (history.length > 0) {
       const lastMsg = history[history.length - 1].content;
       const card = document.createElement('div');
-      card.style.cssText = `
-        background: var(--bg-card); border-radius: 12px; padding: 12px;
-        display: flex; gap: 12px; align-items: center; cursor: pointer; margin-bottom: 10px;
-      `;
+      card.className = 'chat-item';
+      card.onclick = () => openChat(c);
+
       card.innerHTML = `
-        <img src="${c.avatar}" style="width:50px; height:50px; border-radius:50%; object-fit:cover;">
-        <div style="flex:1; overflow:hidden;">
-          <h4 style="margin-bottom:2px;">${c.name}</h4>
-          <p style="font-size:0.75rem; color: var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${lastMsg}</p>
+        <img src="${c.avatar}" class="chat-avatar" alt="${c.name}">
+        <div class="chat-info">
+          <div class="chat-name">${c.name}</div>
+          <div class="chat-last-msg">${formatMessageText(lastMsg)}</div>
         </div>
       `;
-      card.onclick = () => openChat(c);
       list.appendChild(card);
     }
   });
 }
 
-// --- SISTEMA DE CHAT EN VIVO ---
+// ==========================================
+// FORMATEADOR DE ACCIONES (*acción*)
+// ==========================================
+function formatMessageText(text) {
+  if (!text) return '';
+  // Escapar HTML básico para evitar inyecciones
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Reemplazar *texto* con la clase CSS .action-text
+  return escaped.replace(/\*(.*?)\*/g, '<span class="action-text">*$1*</span>');
+}
+
+// ==========================================
+// SISTEMA DE CHAT EN VIVO
+// ==========================================
 function openChat(character) {
   activeCharacter = character;
   
-  document.getElementById('chat-header-name').innerText = character.name;
-  document.getElementById('chat-header-avatar').src = character.avatar;
+  const nameElem = document.getElementById('chat-header-name');
+  const avatarElem = document.getElementById('chat-header-avatar');
+  if (nameElem) nameElem.innerText = character.name;
+  if (avatarElem) avatarElem.src = character.avatar;
   
-  // Establecer fondo difuminado
   const bgOverlay = document.getElementById('chat-bg-overlay');
-  bgOverlay.style.backgroundImage = `url('${character.avatar}')`;
+  if (bgOverlay) bgOverlay.style.backgroundImage = `url('${character.avatar}')`;
 
-  document.getElementById('chat-modal').classList.remove('hidden');
+  const chatModal = document.getElementById('chat-modal');
+  if (chatModal) chatModal.classList.remove('hidden');
+  
   renderChatMessages();
 }
 
 function closeChat() {
-  document.getElementById('chat-modal').classList.add('hidden');
+  const chatModal = document.getElementById('chat-modal');
+  if (chatModal) chatModal.classList.add('hidden');
   activeCharacter = null;
   renderMessagesList();
 }
@@ -242,17 +290,20 @@ function saveChatHistory(charId, history) {
 
 function renderChatMessages() {
   const container = document.getElementById('chat-messages-container');
+  if (!container) return;
   container.innerHTML = '';
 
+  if (!activeCharacter) return;
   const history = getChatHistory(activeCharacter.id);
 
   history.forEach((msg, index) => {
     const bubble = document.createElement('div');
     const isUser = msg.role === 'user';
     bubble.className = `msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}`;
-    bubble.innerText = msg.content;
+    
+    // Aplicar formateo para texto y acciones (*acción*)
+    bubble.innerHTML = formatMessageText(msg.content);
 
-    // Permitir editar mensajes de usuario al hacer clic
     if (isUser) {
       bubble.title = "Haz clic para editar este mensaje";
       bubble.onclick = () => openEditMessageModal(index, msg.content);
@@ -264,9 +315,12 @@ function renderChatMessages() {
   container.scrollTop = container.scrollHeight;
 }
 
-// --- ENVIAR MENSAJE A LA IA ---
+// ==========================================
+// ENVIAR MENSAJE A LA IA
+// ==========================================
 async function sendMessage() {
   const input = document.getElementById('user-input');
+  if (!input) return;
   const text = input.value.trim();
   if (!text || !activeCharacter) return;
 
@@ -281,6 +335,7 @@ async function sendMessage() {
 }
 
 async function requestAIResponse(history) {
+  showTypingIndicator(true);
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -293,6 +348,8 @@ async function requestAIResponse(history) {
     });
 
     const data = await res.json();
+    showTypingIndicator(false);
+
     if (data.reply) {
       history.push({ role: 'assistant', content: data.reply });
       saveChatHistory(activeCharacter.id, history);
@@ -302,16 +359,38 @@ async function requestAIResponse(history) {
       alert("Error: " + (data.error || "No hubo respuesta"));
     }
   } catch (err) {
+    showTypingIndicator(false);
     console.error(err);
     alert("Error conectando con el servidor");
   }
 }
 
-// --- HERRAMIENTAS TALKIE (RAYITO Y RE-INTENTAR) ---
+function showTypingIndicator(show) {
+  let indicator = document.getElementById('typing-indicator');
+  const container = document.getElementById('chat-messages-container');
+  
+  if (show) {
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'typing-indicator';
+      indicator.className = 'typing-indicator';
+      indicator.innerText = `${activeCharacter ? activeCharacter.name : 'IA'} está escribiendo...`;
+      if (container) container.appendChild(indicator);
+    }
+    if (container) container.scrollTop = container.scrollHeight;
+  } else if (indicator) {
+    indicator.remove();
+  }
+}
+
+// ==========================================
+// HERRAMIENTAS TALKIE (RAYITO Y RE-INTENTAR)
+// ==========================================
 async function triggerLightningAuto() {
   if (!activeCharacter) return;
   let history = getChatHistory(activeCharacter.id);
   
+  showTypingIndicator(true);
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -323,6 +402,8 @@ async function triggerLightningAuto() {
       })
     });
     const data = await res.json();
+    showTypingIndicator(false);
+
     if (data.reply) {
       history.push({ role: 'assistant', content: data.reply });
       saveChatHistory(activeCharacter.id, history);
@@ -330,6 +411,7 @@ async function triggerLightningAuto() {
       autoSyncDrive();
     }
   } catch (e) {
+    showTypingIndicator(false);
     alert("Falló la acción automática.");
   }
 }
@@ -346,25 +428,33 @@ async function regenerateLastMessage() {
   }
 }
 
-// --- EDICIÓN DE MENSAJES DE USUARIO ---
+// ==========================================
+// EDICIÓN DE MENSAJES DE USUARIO
+// ==========================================
 function openEditMessageModal(index, text) {
   editingMsgIndex = index;
-  document.getElementById('edit-message-text').value = text;
-  document.getElementById('edit-message-modal').classList.remove('hidden');
+  const editInput = document.getElementById('edit-message-text');
+  if (editInput) editInput.value = text;
+  
+  const modal = document.getElementById('edit-message-modal');
+  if (modal) modal.classList.remove('hidden');
 }
 
 function closeEditMessageModal() {
-  document.getElementById('edit-message-modal').classList.add('hidden');
+  const modal = document.getElementById('edit-message-modal');
+  if (modal) modal.classList.add('hidden');
   editingMsgIndex = null;
 }
 
 async function confirmMessageEdit() {
-  const newText = document.getElementById('edit-message-text').value.trim();
+  const editInput = document.getElementById('edit-message-text');
+  if (!editInput) return;
+  const newText = editInput.value.trim();
   if (!newText || editingMsgIndex === null) return;
 
   let history = getChatHistory(activeCharacter.id);
   
-  // Cortar el historial hasta antes del mensaje editado y agregar el nuevo
+  // Recortar historial hasta el mensaje editado
   history = history.slice(0, editingMsgIndex);
   history.push({ role: 'user', content: newText });
 
@@ -375,11 +465,13 @@ async function confirmMessageEdit() {
   await requestAIResponse(history);
 }
 
-// --- MENÚ 3 PUNTOS & FICHA ---
+// ==========================================
+// MENÚ DROPDOWN, LIMPIAR Y ELIMINAR CHAT
+// ==========================================
 function toggleChatDropdown(e) {
-  e.stopPropagation();
+  if (e) e.stopPropagation();
   const dropdown = document.getElementById('chat-dropdown-menu');
-  dropdown.classList.toggle('hidden');
+  if (dropdown) dropdown.classList.toggle('hidden');
 }
 
 document.addEventListener('click', () => {
@@ -389,9 +481,28 @@ document.addEventListener('click', () => {
 
 function clearChatHistory() {
   if (!activeCharacter) return;
-  if (confirm(`¿Eliminar la conversación con ${activeCharacter.name}?`)) {
+  if (confirm(`¿Reiniciar conversación con ${activeCharacter.name}?`)) {
     saveChatHistory(activeCharacter.id, [{ role: 'assistant', content: activeCharacter.prologue }]);
     renderChatMessages();
+    autoSyncDrive();
+  }
+}
+
+function deleteCurrentCharacter() {
+  if (!activeCharacter) return;
+  if (confirm(`¿Estás seguro de eliminar a "${activeCharacter.name}" y toda su conversación?`)) {
+    const charId = activeCharacter.id;
+    
+    // Eliminar de la lista de personajes
+    characters = characters.filter(c => c.id !== charId);
+    localStorage.setItem('talkie_characters', JSON.stringify(characters));
+    
+    // Eliminar historial
+    localStorage.removeItem(`talkie_chat_${charId}`);
+    
+    closeChat();
+    renderExploreGrid();
+    renderMessagesList();
     autoSyncDrive();
   }
 }
@@ -405,33 +516,43 @@ function openCharacterCard() {
   document.getElementById('card-intro').innerText = activeCharacter.intro;
   document.getElementById('card-scenario').innerText = activeCharacter.scenario || 'Sin escenario definido.';
 
-  document.getElementById('character-card-modal').classList.remove('hidden');
+  const cardModal = document.getElementById('character-card-modal');
+  if (cardModal) cardModal.classList.remove('hidden');
 }
 
 function closeCharacterCard() {
-  document.getElementById('character-card-modal').classList.add('hidden');
+  const cardModal = document.getElementById('character-card-modal');
+  if (cardModal) cardModal.classList.add('hidden');
 }
 
 function handleKeyPress(e) {
   if (e.key === 'Enter') sendMessage();
 }
 
-// --- GOOGLE DRIVE INTEGRACIÓN PERSISTENTE ---
+// ==========================================
+// GOOGLE DRIVE INTEGRACIÓN PERSISTENTE
+// ==========================================
 function checkDriveAuthOnLoad() {
   const token = localStorage.getItem('gdrive_token');
-  if (token) {
-    document.getElementById('drive-status').innerText = 'Drive Conectado';
+  const statusElem = document.getElementById('drive-status');
+  if (token && statusElem) {
+    statusElem.innerText = 'Drive Conectado';
   }
 }
 
 function handleDriveAuth() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    return alert("SDK de Google Drive no cargado.");
+  }
+  
   google.accounts.oauth2.initTokenClient({
     client_id: 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com', // Reemplaza con tu Client ID
     scope: 'https://www.googleapis.com/auth/drive.file',
     callback: (response) => {
       if (response.access_token) {
         localStorage.setItem('gdrive_token', response.access_token);
-        document.getElementById('drive-status').innerText = 'Drive Conectado';
+        const statusElem = document.getElementById('drive-status');
+        if (statusElem) statusElem.innerText = 'Drive Conectado';
         alert("¡Conectado exitosamente con Google Drive!");
         autoSyncDrive();
       }
